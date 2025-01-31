@@ -13,6 +13,14 @@ Layer::Layer(int num,std::string neuronname)
 		type = Tanh;
 	else if (!neuronname.compare("Input"))
 		type = Input;
+	else if (!neuronname.compare("Input2D"))
+		type = Input2D;
+	else if (!neuronname.compare("Pool2D"))
+	{
+		type = Pool2D;
+		padding = num;
+		return;
+	}
 	else
 		type = Sigmoid;
 
@@ -20,4 +28,12 @@ Layer::Layer(int num,std::string neuronname)
 	neurontype = neuronname;
 	values = (double*)malloc(sizeof(double) * number);
 	pre_activation_values = (double*)malloc(sizeof(double) * number);
+}
+
+Layer::Layer(int kernalnumber, int size,std::string layertype)
+{
+	type = Conv;
+	neurontype = "Relu";
+	kernelnumber = kernalnumber;
+	kernelsize = size;
 }

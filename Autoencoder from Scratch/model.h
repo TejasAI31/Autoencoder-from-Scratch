@@ -1,6 +1,7 @@
 #pragma once
 #include "layer.h"
 #include <vector>
+#include <thread>
 
 using namespace std;
 
@@ -46,10 +47,20 @@ public:
 	void Compile(string type);
 	void Initialize();
 	void Train(vector<vector<double>> *inputs,vector<vector<double>> *actual,vector<vector<double>>* predicted,int epochs,string losstype);
+	void Train(vector<vector<vector<double>>>* inputs, vector<vector<double>>* actual, vector<vector<double>>* predicted, int epochs, string losstype);
 	void ShowTrainingStats(vector<vector<double>>* inputs, vector<vector<double>>* actual,int i);
 	void ForwardPropogation(vector<double> sample,vector<double> actualvalue,vector<vector<double>>* predicted);
+	void ConvForwardPropogation(vector<vector<double>> sample, vector<double> actualvalue, vector<vector<double>>* predicted);
 	void ErrorCalculation(vector<double> actualvalue);
 	double DError(double predictedvalue,double actualvalue);
 	void BackPropogation(vector<double> actualvalue);
+	void ConvBackPropogation(vector<double> actualvalue);
 	void LeakyReluParameters(double i, double a);
+	vector<vector<double>> FullConvolve2D(vector<vector<double>>* input, vector<vector<double>>* kernel);
+	vector<vector<double>> Convolve2D(vector<vector<double>> *input, vector<vector<double>> *kernel);
+	vector<vector<double>> Rotate(vector<vector<double>>* input);
+	void AddVectors(vector<vector<double>>* v1, vector<vector<double>>* v2);
+	void UpdateKernel(vector<vector<double>>* v1, vector<vector<double>>* v2);
+	vector<vector<double>> Relu2D(vector<vector<double>>* input);
+	void MaxPooling2D(vector<vector<double>>* input, short int padnum, vector<vector<double>>* outputdest, vector<vector<double>>* chosendest);
 };
