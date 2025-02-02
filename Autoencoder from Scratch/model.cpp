@@ -8,15 +8,13 @@ vector<vector<double>> Network::Convolve2D(vector<vector<double>> *input, vector
 	short int kernelsize = kernel->size();
 	short int columns = input->size();
 	short int rows = (*input)[0].size();
-	short int rowpadding = kernelsize-rows % kernelsize;
-	short int columnpadding = kernelsize-columns % kernelsize;
 
 	vector<vector<double>> output;
 
-	for (int y = 0; y <= columns -kernelsize+columnpadding; y++)
+	for (int y = 0; y <= columns -columns% kernelsize; y++)
 	{
 		vector<double> row;
-		for (int x = 0; x <= rows - kernelsize+ rowpadding; x++)
+		for (int x = 0; x <= rows - rows%kernelsize; x++)
 		{
 			double value = 0;
 			for (int i = 0; i < kernelsize; i++)
@@ -193,14 +191,14 @@ void Network::ConvForwardPropogation(vector<vector<double>> sample, vector<doubl
 		if (layers[i].type == Layer::Conv)
 		{
 			//For all previous convolutions
-			for (int j = 0; j < layers[i - 1].values2D.size(); j++)
+			for (int j = 0; j< layers[i].kernelnumber; j++)
 			{
-				for (int k = 0; k < layers[i].kernelnumber; k++)
+				for (int k = 0; k < layers[i - 1].values2D.size(); k++)
 				{
-					vector<vector<double>> convolution = Convolve2D(&layers[i - 1].values2D[j], &layers[i].kernels[k]);
-					layers[i].pre_activation_values2D[j*layers[i].kernelnumber+k]=convolution;
-					layers[i].values2D[j * layers[i].kernelnumber + k]=Relu2D(&convolution);
+					vector<vector<double>> convolution = Convolve2D(&layers[i - 1].values2D[k], &layers[i].kernels[j][k]);
+					AddVectors(&layers[i].pre_activation_values2D[j], &convolution);
 				}
+				layers[i].values2D[j] = Relu2D(&layers[i].pre_activation_values2D[j]);
 			}
 		}
 		else if (layers[i].type == Layer::Pool2D)
@@ -349,19 +347,18 @@ void Network::ConvBackPropogation(vector<double> actualvalue)
 		//Convolution Case
 		if (layers[i].type == Layer::Conv)
 		{
-			for (int j = 0; j < layers[i - 1].values2D.size(); j++)
+			for (int j = 0; j < layers[i].kernelnumber; j++)
 			{
-				for (int k = 0; k < layers[i].kernelnumber; k++)
+				for (int k = 0; k < layers[i - 1].values2D.size(); k++)
 				{
 					//Calculate Change
-					layers[i].deltakernel[j * layers[i].kernelnumber + k] = Convolve2D(&layers[i - 1].values2D[j], &layers[i].values2D[j * layers[i].kernelnumber + k]);
-					vector<vector<double>> rotatedfilter = Rotate(&layers[i].kernels[j * layers[i].kernelnumber + k]);
-					vector<vector<double>> delta2D = FullConvolve2D(&rotatedfilter, &layers[i].values2D[j * layers[i].kernelnumber + k]);
+					layers[i].deltakernel[j][k] = Convolve2D(&layers[i - 1].values2D[k], &layers[i].values2D[j]);
+					vector<vector<double>> rotatedfilter = Rotate(&layers[i].kernels[j][k]);
+					vector<vector<double>> delta2D = FullConvolve2D(&rotatedfilter, &layers[i].values2D[j]);
 
 					//Update Change
-					AddVectors(&layers[i - 1].values2Dderivative[j], &delta2D);
-					UpdateKernel(&layers[i].kernels[j * layers[i].kernelnumber + k], &layers[i].deltakernel[j * layers[i].kernelnumber + k]);
-					
+					AddVectors(&layers[i - 1].values2Dderivative[k], &delta2D);
+					UpdateKernel(&layers[i].kernels[j][k], &layers[i].deltakernel[j][k]);
 				}
 			}
 		}
@@ -454,33 +451,36 @@ void Network::Initialize()
 		//Check for Convolution Layer
 		if (layers[x].type == Layer::Conv)
 		{
-			for(int j=0;j<layers[x-1].values2D.size();j++)
 			for (int i = 0; i < layers[x].kernelnumber; i++)
 			{
-				vector<vector<double>> kernel;
-				vector<vector<double>> deltaker;
-				for (int j = 0; j < layers[x].kernelsize; j++)
+				vector<vector<vector<double>>> kernelset;
+				layers[x].kernels.push_back(kernelset);
+				layers[x].deltakernel.push_back(kernelset);
+
+				for (int j = 0; j < layers[x - 1].values2D.size(); j++)
 				{
-					vector<double> row;
-					for (int k = 0; k < layers[x].kernelsize; k++)
+					vector<vector<double>> kernel;
+					vector<vector<double>> deltaker;
+					for (int j = 0; j < layers[x].kernelsize; j++)
 					{
-						row.push_back((float)rand() / (float)RAND_MAX);
+						vector<double> row;
+						for (int k = 0; k < layers[x].kernelsize; k++)
+						{
+							row.push_back((float)rand() / (float)RAND_MAX);
+						}
+						kernel.push_back(row);
 					}
-					kernel.push_back(row);
+					layers[x].kernels[i].push_back(kernel);
+					layers[x].deltakernel[i].push_back(deltaker);
 				}
-				layers[x].kernels.push_back(kernel);
-				layers[x].deltakernel.push_back(deltaker);
 			}
 
-			for (int i = 0; i < layers[x - 1].values2D.size(); i++)
+			for (int j = 0; j < layers[x].kernelnumber; j++)
 			{
-				for (int j = 0; j < layers[x].kernelnumber; j++)
-				{
-					vector<vector<double>> temp;
-					layers[x].pre_activation_values2D.push_back(temp);
-					layers[x].values2D.push_back(temp);
-					layers[x].values2Dderivative.push_back(temp);
-				}
+				vector<vector<double>> temp;
+				layers[x].pre_activation_values2D.push_back(temp);
+				layers[x].values2D.push_back(temp);
+				layers[x].values2Dderivative.push_back(temp);
 			}
 		}
 

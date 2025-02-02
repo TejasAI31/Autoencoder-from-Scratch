@@ -25,11 +25,11 @@ public:
 	} layertype;
 
 
-	vector<vector<vector<double>>> kernels;
+	vector<vector<vector<vector<double>>>> kernels;
 	vector<vector<vector<double>>> pre_activation_values2D;
 	vector<vector<vector<double>>> values2D;
 	vector<vector<vector<double>>> values2Dderivative;
-	vector<vector<vector<double>>> deltakernel;
+	vector<vector<vector<vector<double>>>> deltakernel;
 
 	bool flattenweights = false;
 

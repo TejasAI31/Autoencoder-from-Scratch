@@ -304,7 +304,7 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 	{
 		mousepos = GetMousePosition();
 		framecounter++;
-		if (framecounter == 20)
+		if (framecounter == 10)
 		{
 			framecounter = 0;
 			if (autotransition && samplenum < input->size()-2)
@@ -404,22 +404,21 @@ int main()
 	vector<vector<double>> actual;
 	vector<vector<double>> predicted;
 
-	CreateMnistDataset2D(&input, &actual, 1000);
+	CreateMnistDataset2D(&input, &actual, 300);
 	AddNoise2D(&input);
 
 	//Model
 	Network model;
 	model.AddLayer(Layer(28 * 28, "Input2D"));
-	model.AddLayer(Layer(12, 3, "Conv2D"));
+	model.AddLayer(Layer(3, 3, "Conv2D"));
 	model.AddLayer(Layer(2, "Pool2D"));
-	model.AddLayer(Layer(32, "Tanh"));
-	model.AddLayer(Layer(96, "Tanh"));
+	model.AddLayer(Layer(64, "Tanh"));
 	model.AddLayer(Layer(28 * 28, "Relu"));
 
 	model.Compile("Stochastic");
 	model.Summary();
 
-	model.alpha=0.005;
+	model.alpha=0.01;
 	model.Train(&input, &actual,&predicted, 1, "Mean_Squared");
 
 	Display2D(&input, { 28,28 },&predicted,{28,28}, &actual);
