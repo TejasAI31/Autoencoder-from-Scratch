@@ -272,8 +272,10 @@ void Display(vector<vector<double>>* input,vector<int> inputdims, vector<vector<
 	}
 }
 
-void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vector<vector<double>>* predicted, vector<int> predicteddims, vector<vector<double>>* actual)
+void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vector<vector<double>>* predicted, vector<int> predicteddims, vector<vector<double>>* actual,int epochs)
 {
+	static int currentepoch = 1;
+
 	bool autotransition = false;
 
 	const int windowwidth = 1200;
@@ -307,8 +309,16 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 		if (framecounter == 10)
 		{
 			framecounter = 0;
-			if (autotransition && samplenum < input->size()-2)
-				samplenum++;
+			if (autotransition)
+			{
+				if (samplenum < (input->size()-1) * currentepoch&&samplenum<(input->size()-1)*epochs-1)
+					samplenum += 1;
+				else if(currentepoch<=epochs)
+				{
+					currentepoch += 1;
+					samplenum += 1;
+				}
+			}
 		}
 
 		BeginDrawing();
@@ -354,9 +364,10 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 		{
 			for (int j = 0; j < (*input)[0][0].size(); j++)
 			{
-				if ((*input)[samplenum][i][j] > 0)
+				if ((*input)[samplenum-(currentepoch-1)*(input->size()-1)][i][j] > 0)
 				{
-					Color tilecolor = { (*input)[samplenum][i][j]*255 ,(*input)[samplenum][i][j]*255 ,(*input)[samplenum][i][j]*255 ,(*input)[samplenum][i][j]*255};
+					float col = (*input)[samplenum - (currentepoch - 1) * (input->size() - 1)][i][j]*255;
+					Color tilecolor = { col,col,col,col};
 					DrawRectangle(InputBox.x + j * boxside / (double)inputdims[0], InputBox.y + i * boxside / (double)inputdims[1], boxside / (double)inputdims[0], boxside / (double)inputdims[1], tilecolor);
 				}
 			}
@@ -377,15 +388,24 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 		{
 			int row = i / predicteddims[0];
 			int column = i % predicteddims[1];
-			if ((*actual)[samplenum][i] > 0)
+			if ((*actual)[samplenum - (currentepoch - 1) * (actual->size()-1)][i] > 0)
 			{
-				Color tilecolor = { (*actual)[samplenum][i] * 255 ,(*actual)[samplenum][i] * 255 ,(*actual)[samplenum][i] * 255 ,(*actual)[samplenum][i] * 255 };
+				float col = (*actual)[samplenum - (currentepoch - 1) * (actual->size() - 1)][i]*255;
+				Color tilecolor = { col,col,col,col};
 				DrawRectangle(ActualBox.x + column * boxside / (double)predicteddims[0], ActualBox.y + row * boxside / (double)predicteddims[1], boxside / (double)predicteddims[0], boxside / (double)predicteddims[1], tilecolor);
 			}
 		}
 
-		if (CheckCollisionPointRec(mousepos, NextButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && samplenum < input->size()-2)
-			samplenum += 1;
+		if (CheckCollisionPointRec(mousepos, NextButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+		{
+			if (samplenum < (input->size() - 1) * currentepoch&&samplenum < (input->size() - 1) * epochs - 1)
+				samplenum += 1;
+			else if (currentepoch <= epochs)
+			{
+				currentepoch += 1;
+				samplenum += 1;
+			}
+		}
 		if (CheckCollisionPointRec(mousepos, PrevButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && samplenum > 0)
 			samplenum -= 1;
 		if (CheckCollisionPointRec(mousepos, AutoButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
@@ -403,7 +423,7 @@ int main()
 	vector<vector<vector<double>>> input;
 	vector<vector<double>> actual;
 	vector<vector<double>> predicted;
-
+	
 	CreateMnistDataset2D(&input, &actual, 300);
 	AddNoise2D(&input);
 
@@ -421,5 +441,5 @@ int main()
 	model.alpha=0.01;
 	model.Train(&input, &actual,&predicted, 1, "Mean_Squared");
 
-	Display2D(&input, { 28,28 },&predicted,{28,28}, &actual);
+	Display2D(&input, { 28,28 },&predicted,{28,28}, &actual,model.totalepochs);
 }

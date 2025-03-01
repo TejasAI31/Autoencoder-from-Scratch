@@ -37,3 +37,12 @@ Layer::Layer(int kernalnumber, int size,std::string layertype)
 	kernelnumber = kernalnumber;
 	kernelsize = size;
 }
+
+Layer::Layer(int kernalnumber, int size,int kerneldilation, std::string layertype)
+{
+	type = Conv;
+	neurontype = "Relu";
+	kernelnumber = kernalnumber;
+	kernelsize = size;
+	dilation = kerneldilation;
+}

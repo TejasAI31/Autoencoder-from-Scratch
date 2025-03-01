@@ -33,7 +33,8 @@ public:
 
 	bool flattenweights = false;
 
-	int padding;
+	int dilation = 1;
+	int padding=0;
 	int kernelnumber;
 	int kernelsize;
 	int number;
@@ -46,4 +47,5 @@ public:
 
 	Layer(int num,std::string neuronname);
 	Layer(int kernalnumber, int size,std::string layertype);
+	Layer(int kernalnumber, int size, int dilation, std::string layertype);
 };
