@@ -418,6 +418,8 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 
 int main()
 {
+	//Autoencoder
+	/*
 	srand(time(NULL));
 
 	vector<vector<vector<double>>> input;
@@ -442,4 +444,55 @@ int main()
 	model.Train(&input, &actual,&predicted, 1, "Mean_Squared");
 
 	Display2D(&input, { 28,28 },&predicted,{28,28}, &actual,model.totalepochs);
+	*/
+
+	//Image Functions
+	Network nn;
+	srand(time(NULL));
+	vector<vector<vector<double>>> input;
+	vector<vector<double>> actual;
+	CreateMnistDataset2D(&input, &actual, 10);
+	vector<vector<vector<double>>> upscaled = nn.BilinearInterpolation(&input, 90, 30);
+	vector<vector<vector<double>>> edges = nn.SobelEdgeDetection(&upscaled);
+
+	int s =7;
+
+	cout << "Input Image (28X28)\n";
+	for (int x = 0; x < input[s].size(); x++)
+	{
+		for (int y = 0; y < input[s][0].size(); y++)
+		{
+			if (input[s][x][y] == 0)
+				cout << " ";
+			else
+				cout << 1;
+		}
+		cout << "\n";
+	}
+
+	cout << "\nUpscaled Image (90X30)\n";
+	for (int x = 0; x < upscaled[s].size(); x++)
+	{
+		for (int y = 0; y < upscaled[s][0].size(); y++)
+		{
+			if (upscaled[s][x][y] == 0)
+				cout << " ";
+			else
+				cout << 1;
+		}
+		cout << "\n";
+	}
+
+	cout << "\nEdges\n";
+	for (int x = 0; x < edges[s].size(); x++)
+	{
+		for (int y=0;y<edges[s][0].size(); y++)
+		{
+			if (edges[s][x][y] == 0)
+				cout << " ";
+			else
+				cout << 1;
+		}
+		cout << "\n";
+	}
 }

@@ -8,6 +8,8 @@ using namespace std;
 class Network
 {
 public:
+
+	//Deep Learning
 	typedef enum gradtype {
 		Stochastic,
 		Batch,
@@ -40,6 +42,14 @@ public:
 	int totalinputsize;
 	int totalepochs;
 	int batchnum=1;
+
+	double MatrixAverage(vector<vector<double>>* mat);
+	vector<vector<double>> PixelDistances(vector<vector<double>>* mat1, vector<vector<double>>* mat2);
+	vector<vector<vector<double>>> SobelEdgeDetection(vector<vector<vector<double>>>* images);
+	vector<vector<vector<double>>> PrewittEdgeDetection(vector<vector<vector<double>>>* images);
+	vector<vector<vector<double>>> NNInterpolation(vector<vector<vector<double>>>* image,int finalwidth,int finalheight);
+	vector<vector<vector<double>>> BilinearInterpolation(vector<vector<vector<double>>>* image, int finalwidth, int finalheight);
+	vector<vector<vector<double>>> EmptyUpscale(vector<vector<vector<double>>>* image, int finalwidth, int finalheight);
 
 	double Activation(double x,int i);
 	double DActivation(double x, int i);

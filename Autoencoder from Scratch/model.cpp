@@ -2,6 +2,275 @@
 
 using namespace std;
 
+//Image Transformations
+double Network::MatrixAverage(vector<vector<double>>* mat)
+{
+	double sum = 0;
+	for (int x = 0; x < mat->size(); x++)
+	{
+		for (int y = 0; y < (*mat)[0].size(); y++)
+		{
+			sum += (*mat)[x][y];
+		}
+	}
+	return sum / (double)(mat->size()*(*mat)[0].size());
+}
+
+vector<vector<double>> Network::PixelDistances(vector<vector<double>>* mat1, vector<vector<double>>* mat2)
+{
+	vector<vector<double>> distancemat;
+	if (mat1->size() != mat2->size()||mat1->empty())
+		return {};
+
+	for (int x = 0; x < mat1->size(); x++)
+	{
+		vector<double> row;
+		for (int y = 0; y < (*mat1)[0].size(); y++)
+		{
+			row.push_back(sqrt(pow((*mat1)[x][y],2) + pow((*mat2)[x][y],2)));
+		}
+		distancemat.push_back(row);
+	}
+
+	return distancemat;
+}
+
+vector<vector<vector<double>>> Network::EmptyUpscale(vector<vector<vector<double>>>* image, int finalwidth, int finalheight)
+{
+	vector<vector<vector<double>>> finalimage;
+
+	for (int i = 0; i < image->size(); i++)
+	{
+		vector<vector<double>> upscaled;
+		int rowsize = (*image)[i][0].size();
+		int columnsize = (*image)[i].size();
+		int rowstep = floor(finalheight / columnsize);
+		int columnstep = floor(finalwidth / rowsize);
+
+		int ydeficit = finalheight - columnsize;
+		int ycounter = 0;
+		for (int x = 0; x < finalheight; x++)
+		{
+			//Last Column
+			if (ycounter == columnsize - 1)
+			{
+				for (int y = 0; y < finalheight - x - 1; y++)
+				{
+					vector<double> empty(finalwidth,123.456);
+					upscaled.push_back(empty);
+				}
+				break;
+			}
+
+			//Enter Full Row
+			vector<double> row(finalwidth,123.456);
+			int xdeficit = finalwidth - rowsize;
+			int xcounter = 0;
+			for (int y = 0; y < finalwidth; y++)
+			{
+				if (xcounter == rowsize - 1)break;
+				row[y] = (*image)[i][ycounter][xcounter];
+				if (xdeficit > 0)y+=columnstep;
+				xdeficit--;
+				xcounter++;
+			}
+			row[finalwidth - 1] = (*image)[i][ycounter][rowsize - 1];
+			upscaled.push_back(row);
+			
+			//Empty Row
+			if (ydeficit > 0)
+			{
+				for (int z = 0; z < rowstep; z++)
+				{
+					vector<double> empty(finalwidth, 123.456);
+					upscaled.push_back(empty);
+				}
+				x += rowstep;
+			}
+			ydeficit--;
+			ycounter++;
+		}
+
+		//Final Row
+		vector<double> row(finalwidth,123.456);
+		int xdeficit = finalwidth - rowsize;
+		int xcounter = 0;
+		for (int y = 0; y < finalwidth; y++)
+		{
+			if (xcounter == rowsize - 1)break;
+			row[y] = (*image)[i][columnsize-1][xcounter];
+			if (xdeficit > 0)y++;
+			xdeficit--;
+			xcounter++;
+		}
+		row[finalwidth - 1] = (*image)[i][ycounter][rowsize - 1];
+		upscaled.push_back(row);
+
+		//Send Image
+		finalimage.push_back(upscaled);
+	}
+	return finalimage;
+}
+
+vector<vector<vector<double>>> Network::SobelEdgeDetection(vector<vector<vector<double>>>* image)
+{
+	static vector<vector<double>> sobelx = {
+		{-1,0,1},
+		{-2,0,2},
+		{-1,0,1}
+	};
+
+	static vector<vector<double>> sobely = {
+		{1,2,1},
+		{0,0,0},
+		{-1,-2,-1}
+	};
+
+	vector<vector<vector<double>>> edgeimages;
+	
+	for (int x = 0; x < image->size(); x++)
+	{
+		vector<vector<double>> xedges = Convolve2D(&((*image)[x]), &sobelx);
+		vector<vector<double>> yedges = Convolve2D(&((*image)[x]), &sobely);
+		vector<vector<double>> magnitude = PixelDistances(&xedges, &yedges);
+		
+		double threshold = MatrixAverage(&magnitude);
+
+		for (int x = 0; x < magnitude.size(); x++)
+		{
+			for (int y = 0; y < magnitude[0].size(); y++)
+			{
+				magnitude[x][y] = (magnitude[x][y] < threshold) ? 0 : 1;
+			}
+		}
+
+		edgeimages.push_back(magnitude);
+	}
+	return edgeimages;
+}
+
+vector<vector<vector<double>>> Network::PrewittEdgeDetection(vector<vector<vector<double>>>* image)
+{
+	static vector<vector<double>> prewittx = {
+		{-1,0,1},
+		{-1,0,1},
+		{-1,0,1}
+	};
+
+	static vector<vector<double>> prewitty = {
+		{1,1,1},
+		{0,0,0},
+		{-1,-1,-1}
+	};
+
+	vector<vector<vector<double>>> edgeimages;
+
+	for (int x = 0; x < image->size(); x++)
+	{
+		vector<vector<double>> xedges = Convolve2D(&((*image)[x]), &prewittx);
+		vector<vector<double>> yedges = Convolve2D(&((*image)[x]), &prewitty);
+		vector<vector<double>> magnitude = PixelDistances(&xedges, &yedges);
+
+		double threshold = MatrixAverage(&magnitude);
+
+		for (int x = 0; x < magnitude.size(); x++)
+		{
+			for (int y = 0; y < magnitude[0].size(); y++)
+			{
+				magnitude[x][y] = (magnitude[x][y] < threshold) ? 0 : 1;
+			}
+		}
+
+		edgeimages.push_back(magnitude);
+	}
+	return edgeimages;
+}
+
+vector<vector<vector<double>>> Network::NNInterpolation(vector<vector<vector<double>>>* image,int finalwidth,int finalheight)
+{
+	vector<vector<vector<double>>> emptyupscaled = EmptyUpscale(image, finalwidth, finalheight);
+	for (int i = 0; i < emptyupscaled.size(); i++)
+	{
+		//Row Interpolation
+		for (int x = 0; x < emptyupscaled[i].size(); x++)
+		{
+			//Empty Row
+			if (emptyupscaled[i][x][0] == 123.456)continue;
+
+			double value = emptyupscaled[i][x][0];
+			for (int y = 1; y < emptyupscaled[i][x].size(); y++)
+			{
+				if (emptyupscaled[i][x][y] == 123.456)
+					emptyupscaled[i][x][y] = value;
+				else
+					value = emptyupscaled[i][x][y];
+			}
+		}
+
+		//Column Interpolation
+		for (int x = 0; x < emptyupscaled[i][0].size(); x++)
+		{
+			double value = emptyupscaled[i][0][x];
+			for (int y = 1; y < emptyupscaled[i].size(); y++)
+			{
+				if (emptyupscaled[i][y][x] == 123.456)
+					emptyupscaled[i][y][x] = value;
+				else
+					value = emptyupscaled[i][y][x];
+			}
+		}
+	}
+	return emptyupscaled;
+}
+
+vector<vector<vector<double>>> Network::BilinearInterpolation(vector<vector<vector<double>>>* image, int finalwidth, int finalheight)
+{
+	vector<vector<vector<double>>> emptyupscaled = EmptyUpscale(image, finalwidth, finalheight);
+	for (int i = 0; i < emptyupscaled.size(); i++)
+	{
+		//Row Interpolation
+		for (int x = 0; x < emptyupscaled[i].size(); x++)
+		{
+			double value = emptyupscaled[i][x][0];
+			int valuecount = 0;
+			for (int y = 1; y < emptyupscaled[i][x].size(); y++)
+			{
+				if (emptyupscaled[i][x][y] != 123.456)
+				{
+					int denom = y - valuecount;
+					for (int z = 1; z < denom; z++)
+					{
+						emptyupscaled[i][x][valuecount+z] =value*(denom-z)/(double)denom + emptyupscaled[i][x][y]*z/(double)denom;
+					}
+					value = emptyupscaled[i][x][y];
+					valuecount = y;
+				}
+			}
+		}
+
+		//Column Interpolation
+		for (int x = 0; x < emptyupscaled[i][0].size(); x ++)
+		{
+			double value = emptyupscaled[i][0][x];
+			int valuecount = 0;
+			for (int y = 1; y < emptyupscaled[i].size(); y++)
+			{
+				if (emptyupscaled[i][y][x] != 123.456)
+				{
+					int denom = y - valuecount;
+					for (int z = 1; z < denom; z++)
+					{
+						emptyupscaled[i][valuecount + z][x] = value * (denom - z) / (double)denom + emptyupscaled[i][y][x] * z / (double)denom;
+					}
+					value = emptyupscaled[i][y][x];
+					valuecount = y;
+				}
+			}
+		}
+	}
+	return emptyupscaled;
+}
+
 //Convolution Functions
 vector<vector<double>> Network::Convolve2D(vector<vector<double>> *input, vector<vector<double>> *kernel)
 {
@@ -930,3 +1199,4 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 			break;
 	}
 }
+//
