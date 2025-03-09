@@ -18,7 +18,9 @@ public:
 
 	typedef enum losstype {
 		Mean_Squared,
-
+		Mean_Absolute,
+		Mean_Biased,
+		Root_Mean_Squared
 	}losstype;
 
 	typedef enum showparams {
@@ -36,6 +38,8 @@ public:
 	double*** weights;
 	double* errors;
 	double* derrors;
+
+
 	double alpha = 0.1;
 
 	int batchsize;
@@ -66,7 +70,8 @@ public:
 	void ForwardPropogation(vector<double> sample,vector<double> actualvalue,vector<vector<double>>* predicted);
 	void ConvForwardPropogation(vector<vector<double>> sample, vector<double> actualvalue, vector<vector<double>>* predicted);
 	void ErrorCalculation(vector<double> actualvalue);
-	double DError(double predictedvalue,double actualvalue);
+	void AccumulateErrors();
+	double DError(double predictedvalue, double actualvalue, int neuronnum);
 	void CleanErrors();
 	void BackPropogation();
 	void ConvBackPropogation();

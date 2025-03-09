@@ -11,6 +11,8 @@ Layer::Layer(int num,std::string neuronname)
 		type = LeakyRelu;
 	else if (!neuronname.compare("Tanh"))
 		type = Tanh;
+	else if (!neuronname.compare("Softmax"))
+		type = Softmax;
 	else if (!neuronname.compare("Input"))
 		type = Input;
 	else if (!neuronname.compare("Input2D"))
@@ -26,8 +28,7 @@ Layer::Layer(int num,std::string neuronname)
 
 	number = num;
 	neurontype = neuronname;
-	values = (double*)malloc(sizeof(double) * number);
-	pre_activation_values = (double*)malloc(sizeof(double) * number);
+
 }
 
 Layer::Layer(int kernalnumber, int size,std::string layertype)
@@ -46,3 +47,16 @@ Layer::Layer(int kernalnumber, int size,int kerneldilation, std::string layertyp
 	kernelsize = size;
 	dilation = kerneldilation;
 }
+
+Layer::Layer(double drop,std::string layertype)
+{
+	if (!layertype.compare("Dropout"))type = Dropout;
+	else
+		cout << "No Such Layer"<<endl;
+
+	dropout = drop;
+	if (drop == 0)
+		dropout = 0.0;
+}
+
+//

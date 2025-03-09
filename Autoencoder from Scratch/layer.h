@@ -20,8 +20,10 @@ public:
 		Relu,
 		LeakyRelu,
 		Tanh,
+		Softmax,
 		Conv,
-		Pool2D
+		Pool2D,
+		Dropout,
 	} layertype;
 
 
@@ -35,9 +37,12 @@ public:
 
 	int dilation = 1;
 	int padding=0;
-	int kernelnumber;
-	int kernelsize;
-	int number;
+	int kernelnumber=0;
+	int kernelsize=0;
+	int number=0;
+	
+	double softmaxsum = 0;
+	double dropout = 0.0;
 	double* values;
 	double* pre_activation_values;
 
@@ -48,4 +53,5 @@ public:
 	Layer(int num,std::string neuronname);
 	Layer(int kernalnumber, int size,std::string layertype);
 	Layer(int kernalnumber, int size, int dilation, std::string layertype);
+	Layer(double drop,std::string layertype);
 };

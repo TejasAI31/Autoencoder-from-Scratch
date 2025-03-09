@@ -539,22 +539,91 @@ void Network::ConvForwardPropogation(vector<vector<double>> sample, vector<doubl
 	//Calculate Forward Prop
 	for (int i = convend; i < layers.size(); i++)
 	{
-		for (int j = 0; j < layers[i].number; j++)
+		//Check For Dropout
+		if (layers[i].type == Layer::Dropout)
 		{
-			double sum = 0;
-			for (int k = 0; k < layers[i - 1].number; k++)
+			double multrate = 1 / (double)(1 - layers[i].dropout);
+			int totaloff = layers[i].dropout * layers[i].number;
+			int off = 0;
+
+			//Initialization
+			for (int j = 0; j < layers[i].number; j++)
 			{
-				sum += weights[i - 1][k][j] * layers[i - 1].values[k];
+				layers[i].values[j] = layers[i - 1].values[j];
+				if (layers[i].values[j] == 0)layers[i].values[j] = 0.0001;
 			}
-			layers[i].pre_activation_values[j] = sum;
-			layers[i].values[j] = Activation(sum, i);
+			//Turn off neurons
+			if (totaloff > 0)
+			{
+				bool flag = 0;
+				while (!flag)
+				for (int j = 0; j < layers[i].number; j++)
+				{
+					if (rand() / (double)RAND_MAX < layers[i].dropout && layers[i].values[j] != 0)
+					{
+						layers[i].values[j] = 0;
+						if (++off > totaloff)
+						{
+							flag = 1;
+							break;
+						}
+					}
+				}
+			}
+			//Scale Values
+			for (int j = 0; j < layers[i].number; j++)
+			{
+				if (layers[i].values[j] == 0.0001)layers[i].values[j] = 0;
+				if (layers[i].values[j] != 0)layers[i].values[j] *= multrate;
+			}
+		}
+
+		else if (layers[i].type == Layer::Softmax)
+		{
+			//Calculate Pre Activation Values
+			for (int j = 0; j < layers[i].number; j++)
+			{
+				double sum = 0;
+				for (int k = 0; k < layers[i - 1].number; k++)
+				{
+					sum += weights[i - 1][k][j] * layers[i - 1].values[k];
+				}
+				layers[i].pre_activation_values[j] = sum;
+			}
+
+			//Calculate Softsum
+			double softsum = 0;
+			for (int j = 0; j < layers[i].number; j++)
+				softsum += exp(layers[i].pre_activation_values[j]);
+			layers[i].softmaxsum = softsum;
+			
+			//Calculate Activation Values
+			for (int j = 0; j < layers[i].number; j++)
+				layers[i].values[j] = Activation(layers[i].pre_activation_values[j], i);
+		}
+
+		//Sigmoid,Tanh,Relu,etc Cases
+		else
+		{
+			for (int j = 0; j < layers[i].number; j++)
+			{
+				double sum = 0;
+				for (int k = 0; k < layers[i - 1].number; k++)
+				{
+					sum += weights[i - 1][k][j] * layers[i - 1].values[k];
+				}
+				layers[i].pre_activation_values[j] = sum;
+				layers[i].values[j] = Activation(sum, i);
+			}
 		}
 	}
 
 	//Add Output To The List Of Outputs
 	vector<double> output;
-	for (int x = 0; x < layers[layers.size() - 1].number; x++)
-		output.push_back(layers[layers.size() - 1].values[x]);
+	for (int x = 0; x < layers.back().number; x++)
+	{
+		output.push_back(layers.back().values[x]);
+	}
 	predicted->push_back(output);
 
 	//Calculate Error
@@ -596,16 +665,43 @@ void Network::ConvBackPropogation()
 		//Derivative
 		for (int j = 0; j < layers[i].number; j++)
 		{
-			double sum = 0;
-			for (int k = 0; k < layers[i + 1].number; k++)
+			//Dropout Case
+			if (layers[i].type == Layer::Dropout)
 			{
-				sum += layers[i + 1].values[k] * weights[i][j][k];
+				double sum = 0;
+				for (int k = 0; k < layers[i + 1].number; k++)
+				{
+					sum += layers[i + 1].values[k] * weights[i][j][k];
+				}
+				layers[i].values[j] = DActivation(layers[i].pre_activation_values[j], i) * sum;
+				layers[i - 1].values[j] = layers[i].values[j];
 			}
-			layers[i].values[j] = DActivation(layers[i].pre_activation_values[j], i) * sum;
 
-			for (int k = 0; k < layers[i - 1].number; k++)
+			else
 			{
-				weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
+				//Layer Behind Dropout
+				if (layers[i + 1].type == Layer::Dropout)
+				{
+					for (int k = 0; k < layers[i - 1].number; k++)
+					{
+						weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
+					}
+				}
+
+				else
+				{
+					double sum = 0;
+					for (int k = 0; k < layers[i + 1].number; k++)
+					{
+						sum += layers[i + 1].values[k] * weights[i][j][k];
+					}
+					layers[i].values[j] = DActivation(layers[i].pre_activation_values[j], i) * sum;
+
+					for (int k = 0; k < layers[i - 1].number; k++)
+					{
+						weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
+					}
+				}
 			}
 		}
 	}
@@ -639,9 +735,9 @@ void Network::ConvBackPropogation()
 				for (int k = 0; k < layers[i - 1].values2D.size(); k++)
 				{
 					//Calculate Change
-					layers[i].deltakernel[j][k] = Convolve2D(&layers[i - 1].values2D[k], &layers[i].values2D[j]);
+					layers[i].deltakernel[j][k] = Convolve2D(&layers[i - 1].values2D[k], &layers[i].values2Dderivative[j]);
 					vector<vector<double>> rotatedfilter = Rotate(&layers[i].kernels[j][k]);
-					vector<vector<double>> delta2D = FullConvolve2D(&rotatedfilter, &layers[i].values2D[j]);
+					vector<vector<double>> delta2D = FullConvolve2D(&rotatedfilter, &layers[i].values2Dderivative[j]);
 
 					//Update Change
 					AddVectors(&layers[i - 1].values2Dderivative[k], &delta2D);
@@ -718,6 +814,8 @@ void Network::Summary()
 			cout << "LAYER: " << "Pool2D" << "\t\tDIMENSIONS: " << layers[x].padding<<"\n\n";
 		else if(layers[x].type==Layer::Conv)
 			cout << "LAYER: " << "Conv2D" << "\t\tKERNEL SIZE: " << layers[x].kernelsize+(layers[x].dilation-1)*(layers[x].kernelsize-1)<<"\tKERNEL NUMBER: " << layers[x].kernelnumber<< "\n\n";
+		else if (layers[x].type == Layer::Dropout)
+			cout << "LAYER: " << "Dropout" << "\t\tRate: " << layers[x].dropout << "\n\n";
 		else
 			cout << "LAYER: " << layers[x].neurontype << "\t\tNUMBER: " << layers[x].number << "\n\n";
 	}
@@ -730,9 +828,12 @@ void Network::Initialize()
 	vector<vector<double>> temp;
 	layers[0].values2D.push_back(temp);
 	layers[0].values2Dderivative.push_back(temp);
+	layers[0].values = (double*)malloc(sizeof(double) * layers[0].number);
+	layers[0].pre_activation_values = (double*)malloc(sizeof(double) * layers[0].number);
 
 	//Parameter Initialisation
 	weights = (double***)malloc(sizeof(double**) * layers.size() - 1);
+
 	for (int x = 0; x < layers.size() - 1; x++)
 	{
 		//Check for Convolution Layer
@@ -763,7 +864,7 @@ void Network::Initialize()
 			}
 		}
 
-		//Check for Pooling
+		//Check for Pooling2D
 		else if (layers[x].type == Layer::Pool2D)
 		{
 			for (int i = 0; i < layers[x - 1].values2D.size(); i++)
@@ -778,30 +879,66 @@ void Network::Initialize()
 		//Other Cases
 		else
 		{
-			weights[x] = (double**)malloc(sizeof(double*) * layers[x].number);
-			for (int y = 0; y < layers[x].number; y++)
+			//Check for Dropout1D
+			if (layers[x].type == Layer::Dropout)
 			{
-				weights[x][y] = (double*)malloc(sizeof(double) * layers[x + 1].number);
-				for (int z = 0; z < layers[x + 1].number; z++)
+				if (x == 0)
 				{
-					weights[x][y][z] = (double)rand() / (double)RAND_MAX;
+					cout << "Cannot Add Dropout As First Layer" << endl;
+					exit(0);
+				}
+				layers[x].number = layers[x - 1].number;
+
+				layers[x].values = (double*)malloc(sizeof(double) * layers[x].number);
+				layers[x].pre_activation_values = (double*)malloc(sizeof(double) * layers[x].number);
+
+				weights[x] = (double**)malloc(sizeof(double*) * layers[x].number);
+				for (int y = 0; y < layers[x].number; y++)
+				{
+					weights[x][y] = (double*)malloc(sizeof(double) * layers[x + 1].number);
+					for (int z = 0; z < layers[x + 1].number; z++)
+					{
+						weights[x][y][z] = (double)rand() / (double)RAND_MAX;
+					}
+				}
+
+			}
+			else
+			{
+				layers[x].values = (double*)malloc(sizeof(double) * layers[x].number);
+				layers[x].pre_activation_values = (double*)malloc(sizeof(double) * layers[x].number);
+
+				weights[x] = (double**)malloc(sizeof(double*) * layers[x].number);
+				for (int y = 0; y < layers[x].number; y++)
+				{
+					weights[x][y] = (double*)malloc(sizeof(double) * layers[x + 1].number);
+					for (int z = 0; z < layers[x + 1].number; z++)
+					{
+						weights[x][y][z] = (double)rand() / (double)RAND_MAX;
+					}
 				}
 			}
 		}	
 	}
 
-
-	errors = (double*)malloc(sizeof(double) * layers[layers.size() - 1].number);
-	for (int x = 0; x < layers[layers.size() - 1].number; x++)
+	//Last Layer Exceptions
+	if (layers.back().type == Layer::Dropout)
 	{
-		errors[x] = 0;
+		cout << "Cannot Add Dropout to Last Layer" << endl;
+		exit(0);
 	}
 
+	layers.back().values = (double*)malloc(sizeof(double) * layers.back().number);
+	layers.back().pre_activation_values = (double*)malloc(sizeof(double) * layers.back().number);
+
+	errors = (double*)malloc(sizeof(double) * layers[layers.size() - 1].number);
 	derrors = (double*)malloc(sizeof(double) * layers[layers.size() - 1].number);
 	for (int x = 0; x < layers[layers.size() - 1].number; x++)
 	{
+		errors[x] = 0;
 		derrors[x] = 0;
 	}
+
 }
 
 void Network::Compile(string type)
@@ -830,16 +967,21 @@ void Network::Compile(string type, int input_batch_size)
 
 double Network::DActivation(double x, int i)
 {
+	static double temp;
 	switch (layers[i].type)
 	{
 	case Layer::Sigmoid:
-		return Activation(x, i) * (1 - Activation(x, i));
+		 temp= Activation(x, i);
+		return temp * (1 - temp);
 	case Layer::Relu:
 		return (x > 0) ? 1 : 0;
 	case Layer::LeakyRelu:
 		return (x > 0) ? 1 : layers[i].parameters.LeakyReluAlpha;
 	case Layer::Tanh:
 		return 1 - pow(tanh(x), 2);
+	case Layer::Softmax:
+		temp = Activation(x, i);
+		return temp * (1 - temp);
 	}
 }
 
@@ -855,6 +997,8 @@ double Network::Activation(double x,int i)
 		return (x > 0) ? x : layers[i].parameters.LeakyReluAlpha*x;
 	case Layer::Tanh:
 		return tanh(x);
+	case Layer::Softmax:
+		return exp(x) / (double)layers[i].softmaxsum;
 	}
 }
 
@@ -864,30 +1008,43 @@ void Network::ErrorCalculation(vector<double> actualvalue)
 	static int counter = 0;
 	static int totalcounter = 0;
 
-	for (int i = 0; i < layers[layers.size() - 1].number; i++)
+	for (int i = 0; i < layers.back().number; i++)
 	{
 		double error = 0;
+		//Individual Errors
 		switch (model_loss_type)
 		{
 			case Mean_Squared:
-				error = pow(layers[layers.size() - 1].values[i] - actualvalue[i], 2) / 2;
+				error = pow(layers.back().values[i] - actualvalue[i], 2) / 2;
+				break;
+			case Mean_Absolute:
+				error = abs(layers.back().values[i] - actualvalue[i]);
+				break;
+			case Mean_Biased:
+				error = actualvalue[i]- layers.back().values[i];
+				break;
+			case Root_Mean_Squared:
+				error= pow(layers.back().values[i] - actualvalue[i], 2)/2;
 				break;
 		}
 
 		if (gradient_descent_type == Stochastic)
 		{
 			errors[i] = error;
-			derrors[i] = DActivation(layers.back().pre_activation_values[i], layers.size() - 1) * DError(layers.back().values[i], actualvalue[i]);
+			derrors[i] = DActivation(layers.back().pre_activation_values[i], layers.size() - 1) * DError(layers.back().values[i], actualvalue[i], i);
 		}
 		else
 		{
-			errors[i] += error / totalinputsize;
-			derrors[i] += DActivation(layers.back().pre_activation_values[i], layers.size() - 1) * DError(layers.back().values[i], actualvalue[i])/totalinputsize;
+			errors[i] += error;
+			derrors[i] += DActivation(layers.back().pre_activation_values[i], layers.size() - 1) * DError(layers.back().values[i], actualvalue[i], i);
+
 		}
 
 		
 		avgerror += errors[i];
 	}
+	
+
 	counter++;
 	totalcounter++;
 	
@@ -899,13 +1056,39 @@ void Network::ErrorCalculation(vector<double> actualvalue)
 	}
 }
 
-double Network::DError(double predictedvalue,double actualvalue)
+void Network::AccumulateErrors()
 {
-	int finallayer = layers.size() - 1;
+
+	for (int i = 0; i < layers.back().number; i++)
+	{
+		switch (model_loss_type)
+		{
+			case Root_Mean_Squared:
+				errors[i] = sqrt(errors[i]/(double)(2*batchsize));
+				derrors[i] /=(double)(batchsize * 2 * errors[i]);
+				break;
+			case Mean_Squared:
+			case Mean_Absolute:
+			case Mean_Biased:
+				derrors[i] /= (double)batchsize;
+				break;
+		}
+	}
+	
+}
+
+double Network::DError(double predictedvalue, double actualvalue,int neuronnum)
+{
 	switch (model_loss_type)
 	{
 	case Mean_Squared:
-		return actualvalue-predictedvalue;
+		return actualvalue - predictedvalue;
+	case Mean_Absolute:
+		return -predictedvalue / abs(predictedvalue);
+	case Mean_Biased:
+		return -predictedvalue;
+	case Root_Mean_Squared:
+		return actualvalue - predictedvalue;
 	}
 }
 
@@ -926,19 +1109,63 @@ void Network::ForwardPropogation(vector<double> sample,vector<double> actualvalu
 		layers[0].values[i] = sample[i];
 	}
 
-
 	//Calculate Forward Prop
 	for (int i = 1; i < layers.size(); i++)
 	{
-		for (int j = 0; j < layers[i].number; j++)
+		//Check For Dropout
+		if (layers[i].type == Layer::Dropout)
 		{
-			double sum = 0;
-			for (int k = 0; k < layers[i - 1].number; k++)
+			double multrate = 1 / (double)(1 - layers[i].dropout);
+			int totaloff = layers[i].dropout * layers[i].number;
+			int off = 0;
+
+			//Initialization
+			for (int j = 0; j < layers[i].number; j++)
 			{
-				sum += weights[i - 1][k][j] * layers[i - 1].values[k];
+				layers[i].values[j] = layers[i - 1].values[j];
+				if (layers[i].values[j] == 0)layers[i].values[j] = 0.0001;
 			}
-			layers[i].pre_activation_values[j] = sum;
-			layers[i].values[j] = Activation(sum, i);
+
+			//Turn off neurons
+			if (totaloff > 0)
+			{
+				bool flag = 0;
+				while (!flag)
+					for (int j = 0; j < layers[i].number; j++)
+					{
+						if (rand() / (double)RAND_MAX < layers[i].dropout && layers[i].values[j] != 0)
+						{
+							layers[i].values[j] = 0;
+							if (++off > totaloff)
+							{
+								flag = 1;
+								break;
+							}
+						}
+					}
+			}
+
+			//Normalize Values
+			for (int j = 0; j < layers[i].number; j++)
+			{
+				if (layers[i].values[j] == 0.0001)layers[i].values[j] = 0;
+				if (layers[i].values[j] != 0)layers[i].values[j] *= multrate;
+			}
+		}
+
+		//Other Cases
+		else
+		{
+			for (int j = 0; j < layers[i].number; j++)
+			{
+				double sum = 0;
+				for (int k = 0; k < layers[i - 1].number; k++)
+				{
+					sum += weights[i - 1][k][j] * layers[i - 1].values[k];
+				}
+				layers[i].pre_activation_values[j] = sum;
+				layers[i].values[j] = Activation(sum, i);
+			}
 		}
 	}
 
@@ -965,18 +1192,46 @@ void Network::BackPropogation()
 
 	for (int i = final_layer-1; i>0; i--)
 	{
-		for (int j = 0; j < layers[i].number;j++)
+		//Derivative
+		for (int j = 0; j < layers[i].number; j++)
 		{
-			double sum = 0;
-			for (int k = 0; k < layers[i + 1].number; k++)
+			//Dropout Case
+			if (layers[i].type == Layer::Dropout)
 			{
-				sum += layers[i + 1].values[k]*weights[i][j][k];
+				double sum = 0;
+				for (int k = 0; k < layers[i + 1].number; k++)
+				{
+					sum += layers[i + 1].values[k] * weights[i][j][k];
+				}
+				layers[i].values[j] = DActivation(layers[i].pre_activation_values[j], i) * sum;
+				layers[i - 1].values[j] = layers[i].values[j];
 			}
-			layers[i].values[j] =DActivation(layers[i].pre_activation_values[j],i)*sum;
 
-			for (int k = 0; k < layers[i - 1].number; k++)
+			else
 			{
-				weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
+				//Layer Behind Dropout
+				if (layers[i + 1].type == Layer::Dropout)
+				{
+					for (int k = 0; k < layers[i - 1].number; k++)
+					{
+						weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
+					}
+				}
+
+				else
+				{
+					double sum = 0;
+					for (int k = 0; k < layers[i + 1].number; k++)
+					{
+						sum += layers[i + 1].values[k] * weights[i][j][k];
+					}
+					layers[i].values[j] = DActivation(layers[i].pre_activation_values[j], i) * sum;
+
+					for (int k = 0; k < layers[i - 1].number; k++)
+					{
+						weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
+					}
+				}
 			}
 		}
 	}
@@ -1035,9 +1290,13 @@ void Network::Train(vector<vector<double>> *inputs, vector<vector<double>> *actu
 {
 	int inputsize = inputs->size();
 
-	if (!losstype.compare("Mean_Squared"))
+	if (!losstype.compare("MSE"))
 	{
 		losstype = Mean_Squared;
+	}
+	else if (!losstype.compare("MAE"))
+	{
+		model_loss_type = Mean_Absolute;
 	}
 
 	cout << "Training\n========\n" << endl;
@@ -1116,13 +1375,24 @@ void Network::Train(vector<vector<double>> *inputs, vector<vector<double>> *actu
 
 void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double>>* actual, vector<vector<double>>* predicted, int epochs, string loss)
 {
-	int inputsize = inputs->size();
 	totalinputsize = inputs->size();
 	totalepochs = epochs;
 
-	if (!loss.compare("Mean_Squared"))
+	if (!loss.compare("MSE"))
 	{
 		model_loss_type = Mean_Squared;
+	}
+	else if (!loss.compare("MAE"))
+	{
+		model_loss_type = Mean_Absolute;
+	}
+	else if (!loss.compare("MBE"))
+	{
+		model_loss_type = Mean_Biased;
+	}
+	else if (!loss.compare("RMSE"))
+	{
+		model_loss_type = Root_Mean_Squared;
 	}
 
 	cout << "Training\n========\n" << endl;
@@ -1133,7 +1403,7 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 		case Stochastic:
 			for (int l = 0; l < epochs; l++)
 			{
-				for (int i = 0; i < inputsize; i++)
+				for (int i = 0; i < totalinputsize; i++)
 				{
 					//Taking the sample
 					vector<vector<double>> sample = (*inputs)[i];
@@ -1151,9 +1421,10 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 
 
 		case Batch:
+			batchsize= totalinputsize;
 			for (int l = 0; l < epochs; l++)
 			{
-				for (int i = 0; i < inputsize; i++)
+				for (int i = 0; i < batchsize; i++)
 				{
 					//Taking the sample
 					vector<vector<double>> sample = (*inputs)[i];
@@ -1163,7 +1434,9 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 
 					//if (displayparameters == Text)
 						//ShowTrainingStats(inputs, actual, i);
+
 				}
+				AccumulateErrors();
 				ConvBackPropogation();
 				CleanErrors();
 			}
@@ -1182,8 +1455,8 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 						if (j * batchsize + i < inputs->size())
 						{
 							//Taking the sample
-							vector<vector<double>> sample = (*inputs)[i];
-							vector<double> actualvalue = (*actual)[i];
+							vector<vector<double>> sample = (*inputs)[j*batchsize+i];
+							vector<double> actualvalue = (*actual)[j*batchsize+i];
 
 							ConvForwardPropogation(sample, actualvalue, predicted);
 
@@ -1192,6 +1465,7 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 						}
 						else break;
 					}
+					AccumulateErrors();
 					ConvBackPropogation();
 					CleanErrors();
 				}

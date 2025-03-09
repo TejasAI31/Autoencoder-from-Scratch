@@ -290,10 +290,11 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 	Rectangle NextButton = { 950,50,200,100 };
 	Rectangle AutoButton = { 500,650,200,100 };
 	Rectangle PrevButton = { 50,50,200,100 };
+	
 
 	InitWindow(windowwidth, windowheight, "Denoising Autoencoder");
-	SetTargetFPS(144);
-
+	SetTargetFPS(300);
+	
 	Color LineWhite = { 100,100,100,100 };
 
 	int samplenum = 1;
@@ -306,7 +307,7 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 	{
 		mousepos = GetMousePosition();
 		framecounter++;
-		if (framecounter == 10)
+		if (framecounter == 1)
 		{
 			framecounter = 0;
 			if (autotransition)
@@ -359,7 +360,7 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 			DrawLine(PredictedBox.x, PredictedBox.y + i, PredictedBox.x + boxside, PredictedBox.y + i, LineWhite);
 			DrawLine(ActualBox.x, ActualBox.y + i, ActualBox.x + boxside, ActualBox.y + i, LineWhite);
 		}
-
+		
 		for (int i = 0; i < (*input)[0].size(); i++)
 		{
 			for (int j = 0; j < (*input)[0][0].size(); j++)
@@ -419,7 +420,6 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 int main()
 {
 	//Autoencoder
-	/*
 	srand(time(NULL));
 
 	vector<vector<vector<double>>> input;
@@ -432,67 +432,17 @@ int main()
 	//Model
 	Network model;
 	model.AddLayer(Layer(28 * 28, "Input2D"));
-	model.AddLayer(Layer(3, 3, "Conv2D"));
+	model.AddLayer(Layer(3,3, "Conv2D"));
 	model.AddLayer(Layer(2, "Pool2D"));
 	model.AddLayer(Layer(64, "Tanh"));
 	model.AddLayer(Layer(28 * 28, "Relu"));
 
-	model.Compile("Stochastic");
+	model.Compile("Mini B",1);
 	model.Summary();
 
 	model.alpha=0.01;
-	model.Train(&input, &actual,&predicted, 1, "Mean_Squared");
+	model.Train(&input, &actual,&predicted,1, "MSE");
 
 	Display2D(&input, { 28,28 },&predicted,{28,28}, &actual,model.totalepochs);
-	*/
 
-	//Image Functions
-	Network nn;
-	srand(time(NULL));
-	vector<vector<vector<double>>> input;
-	vector<vector<double>> actual;
-	CreateMnistDataset2D(&input, &actual, 10);
-	vector<vector<vector<double>>> upscaled = nn.BilinearInterpolation(&input, 90, 30);
-	vector<vector<vector<double>>> edges = nn.SobelEdgeDetection(&upscaled);
-
-	int s =7;
-
-	cout << "Input Image (28X28)\n";
-	for (int x = 0; x < input[s].size(); x++)
-	{
-		for (int y = 0; y < input[s][0].size(); y++)
-		{
-			if (input[s][x][y] == 0)
-				cout << " ";
-			else
-				cout << 1;
-		}
-		cout << "\n";
-	}
-
-	cout << "\nUpscaled Image (90X30)\n";
-	for (int x = 0; x < upscaled[s].size(); x++)
-	{
-		for (int y = 0; y < upscaled[s][0].size(); y++)
-		{
-			if (upscaled[s][x][y] == 0)
-				cout << " ";
-			else
-				cout << 1;
-		}
-		cout << "\n";
-	}
-
-	cout << "\nEdges\n";
-	for (int x = 0; x < edges[s].size(); x++)
-	{
-		for (int y=0;y<edges[s][0].size(); y++)
-		{
-			if (edges[s][x][y] == 0)
-				cout << " ";
-			else
-				cout << 1;
-		}
-		cout << "\n";
-	}
 }
