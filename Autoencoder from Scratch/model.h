@@ -23,8 +23,14 @@ public:
 		Root_Mean_Squared
 	}losstype;
 
+	typedef enum optimizer {
+		No_Optimizer,
+		Momentum,
+		RMSProp,
+		Adam,
+	}optimizer;
+
 	typedef enum showparams {
-		None,
 		Visual,
 		Text
 	}showparams;
@@ -32,21 +38,28 @@ public:
 	gradtype gradient_descent_type;
 	losstype model_loss_type;
 	showparams displayparameters;
+	optimizer Optimizer;
 
 	vector<Layer> layers;
 
 	double*** weights;
+	double*** momentum1D;
+	double*** rmsp1D;
 	double* errors;
 	double* derrors;
 
 
 	double alpha = 0.1;
+	double momentumbeta = 0.9;
+	double rmspropbeta = 0.999;
+	double rmspropepsilon = 10e-10;
 
 	int batchsize;
 	int totalinputsize;
 	int totalepochs;
 	int batchnum=1;
 
+	//Image
 	double MatrixAverage(vector<vector<double>>* mat);
 	vector<vector<double>> PixelDistances(vector<vector<double>>* mat1, vector<vector<double>>* mat2);
 	vector<vector<vector<double>>> SobelEdgeDetection(vector<vector<vector<double>>>* images);
@@ -55,6 +68,7 @@ public:
 	vector<vector<vector<double>>> BilinearInterpolation(vector<vector<vector<double>>>* image, int finalwidth, int finalheight);
 	vector<vector<vector<double>>> EmptyUpscale(vector<vector<vector<double>>>* image, int finalwidth, int finalheight);
 
+	//Network
 	double Activation(double x,int i);
 	double DActivation(double x, int i);
 	void AddLayer(Layer l);
@@ -76,12 +90,15 @@ public:
 	void BackPropogation();
 	void ConvBackPropogation();
 	void LeakyReluParameters(double i, double a);
+	void SetOptimizer(string opt);
 	vector<vector<double>> FullConvolve2D(vector<vector<double>>* input, vector<vector<double>>* kernel);
 	vector<vector<double>> Convolve2D(vector<vector<double>> *input, vector<vector<double>> *kernel);
 	vector<vector<double>> Rotate(vector<vector<double>>* input);
+	vector<vector<double>> Zero2DMatrix(int x, int y);
 	void AddVectors(vector<vector<double>>* v1, vector<vector<double>>* v2);
-	void UpdateKernel(vector<vector<double>>* v1, vector<vector<double>>* v2);
+	void UpdateKernel(vector<vector<double>>* v1, vector<vector<double>>* v2, vector<vector<double>>* momentumkernel, vector<vector<double>>* rmspkernel);
 	vector<vector<double>> InitializeKernel(int kernelsize, int dilation);
 	vector<vector<double>> Relu2D(vector<vector<double>>* input);
 	void MaxPooling2D(vector<vector<double>>* input, short int padnum, vector<vector<double>>* outputdest, vector<vector<double>>* chosendest);
+	void CleanLayers();
 };

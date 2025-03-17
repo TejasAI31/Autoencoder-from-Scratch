@@ -32,6 +32,9 @@ public:
 	vector<vector<vector<double>>> values2D;
 	vector<vector<vector<double>>> values2Dderivative;
 	vector<vector<vector<vector<double>>>> deltakernel;
+	vector<vector<vector<vector<double>>>> momentum2D;
+	vector<vector<vector<vector<double>>>> rmsp2D;
+
 
 	bool flattenweights = false;
 

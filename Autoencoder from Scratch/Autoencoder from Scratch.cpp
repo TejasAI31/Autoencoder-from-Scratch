@@ -307,7 +307,7 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 	{
 		mousepos = GetMousePosition();
 		framecounter++;
-		if (framecounter == 1)
+		if (framecounter == 40)
 		{
 			framecounter = 0;
 			if (autotransition)
@@ -426,7 +426,7 @@ int main()
 	vector<vector<double>> actual;
 	vector<vector<double>> predicted;
 	
-	CreateMnistDataset2D(&input, &actual, 300);
+	CreateMnistDataset2D(&input, &actual, 2000);
 	AddNoise2D(&input);
 
 	//Model
@@ -434,12 +434,13 @@ int main()
 	model.AddLayer(Layer(28 * 28, "Input2D"));
 	model.AddLayer(Layer(3,3, "Conv2D"));
 	model.AddLayer(Layer(2, "Pool2D"));
-	model.AddLayer(Layer(64, "Tanh"));
+	model.AddLayer(Layer(32, "Tanh"));
 	model.AddLayer(Layer(28 * 28, "Relu"));
 
-	model.Compile("Mini B",1);
+	model.Compile("Stochastic");
 	model.Summary();
 
+	model.SetOptimizer("RMSProp");
 	model.alpha=0.01;
 	model.Train(&input, &actual,&predicted,1, "MSE");
 

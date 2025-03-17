@@ -430,13 +430,31 @@ void Network::MaxPooling2D(vector<vector<double>>* input, short int padnum, vect
 	*chosendest = chosenvalues;
 }
 
-void Network::UpdateKernel(vector<vector<double>>* v1, vector<vector<double>>* v2)
+void Network::UpdateKernel(vector<vector<double>>* v1, vector<vector<double>>* v2, vector<vector<double>>* momentumkernel,vector<vector<double>>* rmspkernel)
 {
 	for (int i = 0; i < v1->size(); i++)
 	{
 		for (int j = 0; j < (*v1)[0].size(); j++)
 		{
-			(*v1)[i][j] += (*v2)[i][j]*alpha;
+			switch (Optimizer)
+			{
+			case No_Optimizer:
+				(*v1)[i][j] += (*v2)[i][j] * alpha;
+				break;
+			case Momentum:
+				(*momentumkernel)[i][j] = momentumbeta * (*momentumkernel)[i][j] + (1 - momentumbeta) * (*v2)[i][j];
+				(*v1)[i][j] += (*momentumkernel)[i][j] * alpha;
+				break;
+			case RMSProp:
+				(*rmspkernel)[i][j] = rmspropbeta * (*rmspkernel)[i][j] + (1 - momentumbeta) * pow((*v2)[i][j],2);
+				(*v1)[i][j] += (*v2)[i][j]/sqrt((*rmspkernel)[i][j] +rmspropepsilon) * alpha;
+				break;
+			case Adam:
+				(*momentumkernel)[i][j] = momentumbeta * (*momentumkernel)[i][j] + (1 - momentumbeta) * (*v2)[i][j];
+				(*rmspkernel)[i][j] = rmspropbeta * (*rmspkernel)[i][j] + (1 - momentumbeta) * pow((*v2)[i][j], 2);
+				(*v1)[i][j] += (*momentumkernel)[i][j] / sqrt((*rmspkernel)[i][j] + rmspropepsilon) * alpha;
+				break;
+			}
 		}
 	}
 	return;
@@ -501,14 +519,17 @@ void Network::ConvForwardPropogation(vector<vector<double>> sample, vector<doubl
 		else
 		{
 			//FLATTEN
-			layers[i - 1].values = (double*)malloc(sizeof(double) * layers[i - 1].values2D.size() * layers[i - 1].values2D[0].size() * layers[i - 1].values2D[0][0].size());
-			layers[i - 1].number = layers[i - 1].values2D.size() * layers[i - 1].values2D[0].size() * layers[i - 1].values2D[0][0].size();
+			if (layers[i - 1].number == 0)
+			{
+				layers[i - 1].values = (double*)malloc(sizeof(double) * layers[i - 1].values2D.size() * layers[i - 1].values2D[0].size() * layers[i - 1].values2D[0][0].size());
+				layers[i - 1].number = layers[i - 1].values2D.size() * layers[i - 1].values2D[0].size() * layers[i - 1].values2D[0][0].size();
+			}
 			unsigned long long int counter = 0;
 			for (int j = 0; j < layers[i - 1].values2D.size(); j++)
 			{
 				for (int k = 0; k < layers[i - 1].values2D[j].size(); k++)
 				{
-					for (int l = 0; l < layers[i - 1].values2D[j][0].size(); l++)
+					for (int l = 0; l < layers[i - 1].values2D[j][k].size(); l++)
 					{
 						layers[i - 1].values[counter] = layers[i - 1].values2D[j][k][l];
 						counter++;
@@ -520,12 +541,20 @@ void Network::ConvForwardPropogation(vector<vector<double>> sample, vector<doubl
 			if (!layers[i-1].flattenweights)
 			{
 				weights[i - 1] = (double**)malloc(sizeof(double*) * layers[i - 1].number);
+				momentum1D[i - 1] = (double**)malloc(sizeof(double*) * layers[i - 1].number);
+				rmsp1D[i - 1] = (double**)malloc(sizeof(double*) * layers[i - 1].number);
+
 				for (int j = 0; j < layers[i - 1].number; j++)
 				{
 					weights[i - 1][j] = (double*)malloc(sizeof(double) * layers[i].number);
+					momentum1D[i - 1][j] = (double*)malloc(sizeof(double) * layers[i].number);
+					rmsp1D[i - 1][j] = (double*)malloc(sizeof(double) * layers[i].number);
+
 					for (int k = 0; k < layers[i].number; k++)
 					{
 						weights[i - 1][j][k] = (double)rand() / (double)RAND_MAX;
+						momentum1D[i - 1][j][k] = 0.0;
+						rmsp1D[i - 1][j][k] = 0.0;
 					}
 				}
 				layers[i - 1].flattenweights = true;
@@ -638,9 +667,29 @@ void Network::ConvBackPropogation()
 	{
 		for (int j = 0; j < layers[final_layer - 1].number; j++)
 		{
-			weights[final_layer - 1][j][i] += alpha * layers[final_layer - 1].values[j] * derrors[i];
+			switch (Optimizer)
+			{
+			case No_Optimizer:
+				weights[final_layer - 1][j][i] += alpha * layers[final_layer - 1].values[j] * derrors[i];
+				break;
+			case Momentum:
+				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[j] * derrors[i]);
+				weights[final_layer - 1][j][i] += alpha * momentum1D[final_layer - 1][j][i];
+				break;
+			case RMSProp:
+				rmsp1D[final_layer-1][j][i]= rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[j] * derrors[i]),2);
+				weights[final_layer - 1][j][i] += alpha * (layers[final_layer - 1].values[j] * derrors[i])/(sqrt(rmsp1D[final_layer - 1][j][i]+rmspropepsilon));
+				break;
+			case Adam:
+				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[j] * derrors[i]);
+				rmsp1D[final_layer - 1][j][i] = rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[j] * derrors[i]), 2);
+				weights[final_layer - 1][j][i] += alpha * momentum1D[final_layer - 1][j][i] / (sqrt(rmsp1D[final_layer - 1][j][i] + rmspropepsilon));
+				break;
+			
+			}
 		}
 	}
+
 
 	int convstart = 0;
 	for (int i = final_layer - 1; i > 0; i--)
@@ -679,16 +728,7 @@ void Network::ConvBackPropogation()
 
 			else
 			{
-				//Layer Behind Dropout
-				if (layers[i + 1].type == Layer::Dropout)
-				{
-					for (int k = 0; k < layers[i - 1].number; k++)
-					{
-						weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
-					}
-				}
-
-				else
+				if (layers[i + 1].type != Layer::Dropout)
 				{
 					double sum = 0;
 					for (int k = 0; k < layers[i + 1].number; k++)
@@ -696,12 +736,30 @@ void Network::ConvBackPropogation()
 						sum += layers[i + 1].values[k] * weights[i][j][k];
 					}
 					layers[i].values[j] = DActivation(layers[i].pre_activation_values[j], i) * sum;
-
-					for (int k = 0; k < layers[i - 1].number; k++)
-					{
-						weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
-					}
 				}
+
+				for (int k = 0; k < layers[i - 1].number; k++)
+				{
+					switch (Optimizer)
+					{
+					case No_Optimizer:
+						weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
+						break;
+					case Momentum:
+						momentum1D[i - 1][k][j] = momentumbeta * momentum1D[i - 1][k][j] + (1 - momentumbeta) * (layers[i].values[j] * layers[i - 1].values[k]);
+						weights[i - 1][k][j] += alpha * momentum1D[i - 1][k][j];
+						break;
+					case RMSProp:
+						rmsp1D[i - 1][k][j] = rmspropbeta * rmsp1D[i - 1][k][j] + (1 - rmspropbeta) * pow((layers[i].values[j] * layers[i - 1].values[k]), 2);
+						weights[i - 1][k][j] += alpha * (layers[i].values[j] * layers[i - 1].values[k]) / (sqrt(rmsp1D[i - 1][k][j]) + rmspropepsilon);
+				 		break;
+				 	case Adam:
+						momentum1D[i - 1][k][j] = momentumbeta * momentum1D[i - 1][k][j] + (1 - momentumbeta) * (layers[i].values[j] * layers[i - 1].values[k]);
+						rmsp1D[i - 1][k][j] = rmspropbeta * rmsp1D[i - 1][k][j] + (1 - rmspropbeta) * pow((layers[i].values[j] * layers[i - 1].values[k]), 2);
+						weights[i - 1][k][j] += alpha * momentum1D[i - 1][k][j] / (sqrt(rmsp1D[i - 1][k][j]) + rmspropepsilon);
+				 		break;
+					}
+			   	}
 			}
 		}
 	}
@@ -741,7 +799,7 @@ void Network::ConvBackPropogation()
 
 					//Update Change
 					AddVectors(&layers[i - 1].values2Dderivative[k], &delta2D);
-					UpdateKernel(&layers[i].kernels[j][k], &layers[i].deltakernel[j][k]);
+					UpdateKernel(&layers[i].kernels[j][k], &layers[i].deltakernel[j][k], &layers[i].momentum2D[j][k], &layers[i].rmsp2D[j][k]);
 				}
 			}
 		}
@@ -769,7 +827,7 @@ void Network::ConvBackPropogation()
 							for (int m = 0; m < layers[i].padding; m++)
 							{
 								if (layers[i].pre_activation_values2D[h][j + l][k + m])
-									layers[i - 1].values2Dderivative[h][j + l][k + m] = layers[i].values2D[h][j][k];
+									layers[i - 1].values2Dderivative[h][j + l][k + m] = layers[i].values2Dderivative[h][j][k];
 							}
 						}
 					}
@@ -777,12 +835,61 @@ void Network::ConvBackPropogation()
 			}
 		}
 	}
+
+	CleanLayers();
 }
 
 //Generic Functions
 void Network::AddLayer(Layer l)
 {
 	layers.push_back(l);
+}
+
+void Network::CleanLayers()
+{
+	for (int i = 0; i < layers.size(); i++)
+	{
+		if (layers[i].type == Layer::Conv)
+		{
+			for (int j = 0; j < layers[i].pre_activation_values2D.size(); j++)
+			{
+				for (int k = 0; k < layers[i].pre_activation_values2D[j].size(); k++)
+				{
+					for (int l = 0; l < layers[i].pre_activation_values2D[j][k].size(); l++)
+					{
+						layers[i].pre_activation_values2D[j][k][l] = 0;
+					}
+				}
+			}
+		}
+
+		if (layers[i].type == Layer::Pool2D)
+		{
+
+		}
+
+	}
+}
+
+vector<vector<double>> Network::Zero2DMatrix(int x, int y)
+{
+	vector<vector<double>> mat;
+	for (int ay = 0; ay < y; ay++)
+	{
+		vector<double> zerorow(x);
+		mat.push_back(zerorow);
+	}
+	return mat;
+}
+
+void Network::SetOptimizer(string opt)
+{
+	if (!opt.compare("Momentum"))
+		Optimizer = Momentum;
+	else if (!opt.compare("RMSProp"))
+		Optimizer = RMSProp;
+	else if (!opt.compare("Adam"))
+		Optimizer = Adam;
 }
 
 void Network::PrintParameters()
@@ -833,28 +940,40 @@ void Network::Initialize()
 
 	//Parameter Initialisation
 	weights = (double***)malloc(sizeof(double**) * layers.size() - 1);
+	momentum1D = (double***)malloc(sizeof(double**) * layers.size() - 1);
+	rmsp1D = (double***)malloc(sizeof(double**) * layers.size() - 1);
 
 	for (int x = 0; x < layers.size() - 1; x++)
 	{
 		//Check for Convolution Layer
 		if (layers[x].type == Layer::Conv)
 		{
+			//Kernels
 			for (int i = 0; i < layers[x].kernelnumber; i++)
 			{
 				vector<vector<vector<double>>> kernelset;
 				layers[x].kernels.push_back(kernelset);
 				layers[x].deltakernel.push_back(kernelset);
+				layers[x].momentum2D.push_back(kernelset);
+				layers[x].rmsp2D.push_back(kernelset);
 
 				for (int j = 0; j < layers[x - 1].values2D.size(); j++)
 				{
 					vector<vector<double>> kernel=InitializeKernel(layers[x].kernelsize,layers[x].dilation);
 					vector<vector<double>> deltaker;
+
+					//Optimizer params
+					vector<vector<double>> momentumkernel = Zero2DMatrix(layers[x].kernelsize + (layers[x].dilation - 1) * (layers[x].kernelsize - 1), layers[x].kernelsize + (layers[x].dilation - 1) * (layers[x].kernelsize - 1));
 					
 					layers[x].kernels[i].push_back(kernel);
 					layers[x].deltakernel[i].push_back(deltaker);
+
+					layers[x].momentum2D[i].push_back(momentumkernel);
+					layers[x].rmsp2D[i].push_back(momentumkernel);
 				}
 			}
 
+			//Value Matrices
 			for (int j = 0; j < layers[x].kernelnumber; j++)
 			{
 				vector<vector<double>> temp;
@@ -889,32 +1008,56 @@ void Network::Initialize()
 				}
 				layers[x].number = layers[x - 1].number;
 
+				//Values
 				layers[x].values = (double*)malloc(sizeof(double) * layers[x].number);
 				layers[x].pre_activation_values = (double*)malloc(sizeof(double) * layers[x].number);
 
+				//Weights
 				weights[x] = (double**)malloc(sizeof(double*) * layers[x].number);
+
+				//Optimizer Params
+				momentum1D[x] = (double**)malloc(sizeof(double*) * layers[x].number);
+				rmsp1D[x] = (double**)malloc(sizeof(double*) * layers[x].number);
+
 				for (int y = 0; y < layers[x].number; y++)
 				{
 					weights[x][y] = (double*)malloc(sizeof(double) * layers[x + 1].number);
+					momentum1D[x][y] = (double*)malloc(sizeof(double) * layers[x + 1].number);
+					rmsp1D[x][y] = (double*)malloc(sizeof(double) * layers[x + 1].number);
+
 					for (int z = 0; z < layers[x + 1].number; z++)
 					{
 						weights[x][y][z] = (double)rand() / (double)RAND_MAX;
+						momentum1D[x][y][z] = 0.0;
+						rmsp1D[x][y][z] = 0.0;
 					}
 				}
 
 			}
 			else
 			{
+				//Values
 				layers[x].values = (double*)malloc(sizeof(double) * layers[x].number);
 				layers[x].pre_activation_values = (double*)malloc(sizeof(double) * layers[x].number);
 
+				//Weights
 				weights[x] = (double**)malloc(sizeof(double*) * layers[x].number);
+
+				//Optimizer Params
+				momentum1D[x] = (double**)malloc(sizeof(double*) * layers[x].number);
+				rmsp1D[x] = (double**)malloc(sizeof(double*) * layers[x].number);
+
 				for (int y = 0; y < layers[x].number; y++)
 				{
 					weights[x][y] = (double*)malloc(sizeof(double) * layers[x + 1].number);
+					momentum1D[x][y] = (double*)malloc(sizeof(double) * layers[x + 1].number);
+					rmsp1D[x][y] = (double*)malloc(sizeof(double) * layers[x + 1].number);
+
 					for (int z = 0; z < layers[x + 1].number; z++)
 					{
 						weights[x][y][z] = (double)rand() / (double)RAND_MAX;
+						momentum1D[x][y][z] =0.0;
+						rmsp1D[x][y][z] = 0.0;
 					}
 				}
 			}
@@ -1282,8 +1425,6 @@ void Network::SetDisplayParameters(string s)
 		displayparameters = Visual;
 	else if (!s.compare("Text"))
 		displayparameters = Text;
-	else
-		displayparameters = None;
 }
 
 void Network::Train(vector<vector<double>> *inputs, vector<vector<double>> *actual,vector<vector<double>>* predicted, int epochs, string losstype)
@@ -1410,7 +1551,6 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 					vector<double> actualvalue = (*actual)[i];
 
 					ConvForwardPropogation(sample, actualvalue, predicted);
-
 					//if (displayparameters == Text)
 						//ShowTrainingStats(inputs, actual, i);
 
