@@ -62,7 +62,7 @@ void CreateMnistDataset(vector<vector<double>>* input, vector<vector<double>>* a
 		file.read((char*)(temp.data()), 28 * 28);
 		for (int i = 0; i < 28 * 28; i++)
 		{
-			sample.push_back((double)(temp[i]));
+			sample.push_back((double)(temp[i]/(double)255));
 		}
 
 		actual->push_back(sample);
@@ -118,7 +118,7 @@ void CreateMnistDataset2D(vector<vector<vector<double>>>* input, vector<vector<d
 void AddNoise(vector<vector<double>>* input)
 {
 	default_random_engine generator;
-	normal_distribution<double> dist(0,120);
+	normal_distribution<double> dist(0,0.3);
 
 	for (int x = 0; x < input->size(); x++)
 	{
@@ -172,7 +172,7 @@ void Display(vector<vector<double>>* input,vector<int> inputdims, vector<vector<
 
 	Color LineWhite = { 100,100,100,100 };
 
-	int samplenum =((int)rand())%input->size()-1;
+	int samplenum = 0;
 	int framecounter = 0;
 
 	Vector2 mousepos;
@@ -181,7 +181,7 @@ void Display(vector<vector<double>>* input,vector<int> inputdims, vector<vector<
 	{
 		mousepos = GetMousePosition();
 		framecounter++;
-		if (framecounter == 60)
+		if (framecounter == 1)
 		{
 			framecounter = 0;
 			if(autotransition&&samplenum<input->size()-2)
@@ -233,7 +233,7 @@ void Display(vector<vector<double>>* input,vector<int> inputdims, vector<vector<
 			int column = i % inputdims[1];
 			if ((*input)[samplenum][i] > 0)
 			{
-				Color tilecolor = { (*input)[samplenum][i] ,(*input)[samplenum][i] ,(*input)[samplenum][i] ,(*input)[samplenum][i] };
+				Color tilecolor = { (*input)[samplenum][i]*255 ,(*input)[samplenum][i]*255 ,(*input)[samplenum][i] * 255 ,(*input)[samplenum][i] * 255 };
 				DrawRectangle(InputBox.x + column * boxside / (double)inputdims[0], InputBox.y + row * boxside / (double)inputdims[1], boxside / (double)inputdims[0], boxside / (double)inputdims[1], tilecolor);
 			}
 		}
@@ -244,7 +244,7 @@ void Display(vector<vector<double>>* input,vector<int> inputdims, vector<vector<
 			int column = i % predicteddims[1];
 			if ((*predicted)[samplenum+1][i] > 0)
 			{
-				Color tilecolor = { (*predicted)[samplenum+1][i] ,(*predicted)[samplenum+1][i] ,(*predicted)[samplenum+1][i] ,(*predicted)[samplenum+1][i] };
+				Color tilecolor = { (*predicted)[samplenum+1][i] * 255 ,(*predicted)[samplenum+1][i] * 255 ,(*predicted)[samplenum+1][i] * 255 ,(*predicted)[samplenum+1][i] * 255 };
 				DrawRectangle(PredictedBox.x + column * boxside / (double)predicteddims[0], PredictedBox.y + row * boxside / (double)predicteddims[1], boxside / (double)predicteddims[0], boxside / (double)predicteddims[1], tilecolor);
 			}
 		}
@@ -255,7 +255,7 @@ void Display(vector<vector<double>>* input,vector<int> inputdims, vector<vector<
 			int column = i % predicteddims[1];
 			if ((*actual)[samplenum][i] > 0)
 			{
-				Color tilecolor = { (*actual)[samplenum][i] ,(*actual)[samplenum][i] ,(*actual)[samplenum][i] ,(*actual)[samplenum][i] };
+				Color tilecolor = { (*actual)[samplenum][i] * 255 ,(*actual)[samplenum][i] * 255,(*actual)[samplenum][i] * 255,(*actual)[samplenum][i] * 255 };
 				DrawRectangle(ActualBox.x + column * boxside / (double)predicteddims[0], ActualBox.y + row * boxside / (double)predicteddims[1], boxside / (double)predicteddims[0], boxside / (double)predicteddims[1], tilecolor);
 			}
 		}
@@ -422,11 +422,14 @@ int main()
 	//Autoencoder
 	srand(time(NULL));
 
+	
+	//2D Variant
+	/*
 	vector<vector<vector<double>>> input;
 	vector<vector<double>> actual;
 	vector<vector<double>> predicted;
 	
-	CreateMnistDataset2D(&input, &actual, 2000);
+	CreateMnistDataset2D(&input, &actual, 300);
 	AddNoise2D(&input);
 
 	//Model
@@ -441,9 +444,37 @@ int main()
 	model.Summary();
 
 	model.SetOptimizer("RMSProp");
-	model.alpha=0.01;
+	model.alpha=0.0005;
 	model.Train(&input, &actual,&predicted,1, "MSE");
 
 	Display2D(&input, { 28,28 },&predicted,{28,28}, &actual,model.totalepochs);
+	*/
 
+	
+	//1D Variant
+	vector<vector<double>> input;
+	vector<vector<double>> actual;
+	vector<vector<double>> predicted;
+
+	CreateMnistDataset(&input, &actual, 1000);
+	AddNoise(&input);
+
+	Network model;
+	model.AddLayer(Layer(28 * 28, "Input"));
+	model.AddLayer(Layer(64, "Tanh"));
+	model.AddLayer(Layer(32, "Tanh"));
+	model.AddLayer(Layer(64, "Tanh"));
+	model.AddLayer(Layer(28 * 28, "Relu"));
+
+	model.SetInitializer("Glorot");
+	model.SetOptimizer("RMSProp");
+
+	model.Compile("Stochastic");
+	model.alpha = 0.002;
+	model.Summary();
+
+	model.Train(&input, &actual, &predicted, 1, "MSE");
+
+	Display(&input, { 28,28 },&predicted,{28,28} ,&actual);
+	
 }

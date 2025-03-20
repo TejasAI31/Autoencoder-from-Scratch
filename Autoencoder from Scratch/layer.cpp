@@ -5,6 +5,8 @@ Layer::Layer(int num,std::string neuronname)
 
 	if (!neuronname.compare("Sigmoid"))
 		type = Sigmoid;
+	else if (!neuronname.compare("Linear"))
+		type = Linear;
 	else if (!neuronname.compare("Relu"))
 		type = Relu;
 	else if (!neuronname.compare("LRelu"))

@@ -16,6 +16,7 @@ public:
 	typedef enum layertype {
 		Input2D,
 		Input,
+		Linear,
 		Sigmoid,
 		Relu,
 		LeakyRelu,

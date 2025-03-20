@@ -1,6 +1,6 @@
 #pragma once
 #include "layer.h"
-#include <vector>
+#include <random>
 #include <thread>
 
 using namespace std;
@@ -30,6 +30,12 @@ public:
 		Adam,
 	}optimizer;
 
+	typedef enum weightinitializer {
+		Glorot,
+		He,
+		Random
+	}weightinitializer;
+
 	typedef enum showparams {
 		Visual,
 		Text
@@ -38,11 +44,14 @@ public:
 	gradtype gradient_descent_type;
 	losstype model_loss_type;
 	showparams displayparameters;
+
 	optimizer Optimizer;
+	weightinitializer WeightInitializer;
 
 	vector<Layer> layers;
 
 	double*** weights;
+	double** biases;
 	double*** momentum1D;
 	double*** rmsp1D;
 	double* errors;
@@ -78,19 +87,19 @@ public:
 	void Compile(string type,int batch_size);
 	void Compile(string type);
 	void Initialize();
+	double WeightInitialization(int fan_in, int fan_out);
 	void Train(vector<vector<double>> *inputs,vector<vector<double>> *actual,vector<vector<double>>* predicted,int epochs,string loss);
 	void Train(vector<vector<vector<double>>>* inputs, vector<vector<double>>* actual, vector<vector<double>>* predicted, int epochs, string loss);
 	void ShowTrainingStats(vector<vector<double>>* inputs, vector<vector<double>>* actual,int i);
-	void ForwardPropogation(vector<double> sample,vector<double> actualvalue,vector<vector<double>>* predicted);
-	void ConvForwardPropogation(vector<vector<double>> sample, vector<double> actualvalue, vector<vector<double>>* predicted);
+	void ForwardPropogation(vector<vector<double>> sample, vector<double> actualvalue, vector<vector<double>>* predicted);
 	void ErrorCalculation(vector<double> actualvalue);
 	void AccumulateErrors();
 	double DError(double predictedvalue, double actualvalue, int neuronnum);
 	void CleanErrors();
 	void BackPropogation();
-	void ConvBackPropogation();
 	void LeakyReluParameters(double i, double a);
 	void SetOptimizer(string opt);
+	void SetInitializer(string init);
 	vector<vector<double>> FullConvolve2D(vector<vector<double>>* input, vector<vector<double>>* kernel);
 	vector<vector<double>> Convolve2D(vector<vector<double>> *input, vector<vector<double>> *kernel);
 	vector<vector<double>> Rotate(vector<vector<double>>* input);
