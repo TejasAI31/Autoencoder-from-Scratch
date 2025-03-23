@@ -444,7 +444,7 @@ int main()
 	model.Summary();
 
 	model.SetOptimizer("Adam");
-	model.alpha=0.0005;
+	model.lr=0.0005;
 	model.Train(&input, &actual,&predicted,50, "MSE");
 
 	//Display2D(&input, { 28,28 },&predicted,{28,28}, &actual,model.totalepochs);
@@ -456,7 +456,7 @@ int main()
 	vector<vector<double>> actual;
 	vector<vector<double>> predicted;
 
-	CreateMnistDataset(&input, &actual, 50000);
+	CreateMnistDataset(&input, &actual, 5000);
 	AddNoise(&input);
 
 	Network model;
@@ -468,12 +468,19 @@ int main()
 
 	model.SetInitializer("Glorot");
 	model.SetOptimizer("Adam");
+	model.lr = 0.0001;
+
+	model.SetLRScheduler("Reduce_LR_On_Plateau");
+	model.LR_Scheduler.gamma = 0.1;
+	model.LR_Scheduler.patience = 2;
+	model.LR_Scheduler.threshold = 0.01;
+	model.LR_Scheduler.min_lr = 1e-7;
 
 	model.Compile("Mini Batch",256);
-	model.alpha = 0.00001;
+
 	model.Summary();
 
-	model.Train(&input, &actual, &predicted, 100, "MSE");
+	model.Train(&input, &actual, &predicted, 40, "MSE");
 
 	//Display(&input, { 28,28 },&predicted,{28,28} ,&actual);
 	

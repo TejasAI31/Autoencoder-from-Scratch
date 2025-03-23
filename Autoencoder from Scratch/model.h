@@ -8,8 +8,37 @@ using namespace std;
 class Network
 {
 public:
-
+	
 	//Deep Learning
+
+	typedef enum scheduler_type {
+		No_Scheduler,
+		Step_LR,
+		Multi_Step_LR,
+		Constant_LR,
+		Linear_LR,
+		Exponential_LR,
+		Reduce_LR_On_Plateau,
+
+	}scheduler_type;
+
+	typedef struct lr_scheduler {
+		scheduler_type type=No_Scheduler;
+		string mode = "min";
+		double threshold = 0.1;
+		int patience = 5;
+		double final_lr = 0;
+		double min_lr = 0;
+		double gamma = 0.5;
+		vector<int> milestones = {};
+		int iterations = 0;
+		int step = 5;
+
+		double lineardiff = 0;
+		
+		
+	}lr_scheduler;
+	
 	typedef enum gradtype {
 		Stochastic,
 		Batch,
@@ -45,6 +74,7 @@ public:
 	losstype model_loss_type;
 	showparams displayparameters;
 
+	lr_scheduler LR_Scheduler;
 	optimizer Optimizer;
 	weightinitializer WeightInitializer;
 
@@ -58,7 +88,7 @@ public:
 	vector<double> derrors;
 
 
-	double alpha = 10e-5;
+	double lr = 10e-5;
 	double momentumbeta = 0.9;
 	double rmspropbeta = 0.999;
 	double rmspropepsilon = 10e-10;
@@ -89,6 +119,8 @@ public:
 	double DActivation(double x, int i);
 	void AddLayer(Layer l);
 	void SetDisplayParameters(string s);
+	void SetLRScheduler(string s);
+	void UpdateLearningRate(int epoch);
 	void Summary();
 	void PrintParameters();
 	void Compile(string type,int batch_size);

@@ -439,20 +439,20 @@ void Network::UpdateKernel(vector<vector<double>>* v1, vector<vector<double>>* v
 			switch (Optimizer)
 			{
 			case No_Optimizer:
-				(*v1)[i][j] += (*v2)[i][j] * alpha;
+				(*v1)[i][j] += (*v2)[i][j] * lr;
 				break;
 			case Momentum:
 				(*momentumkernel)[i][j] = momentumbeta * (*momentumkernel)[i][j] + (1 - momentumbeta) * (*v2)[i][j];
-				(*v1)[i][j] += (*momentumkernel)[i][j] * alpha;
+				(*v1)[i][j] += (*momentumkernel)[i][j] * lr;
 				break;
 			case RMSProp:
 				(*rmspkernel)[i][j] = rmspropbeta * (*rmspkernel)[i][j] + (1 - momentumbeta) * pow((*v2)[i][j],2);
-				(*v1)[i][j] += (*v2)[i][j]/sqrt((*rmspkernel)[i][j] +rmspropepsilon) * alpha;
+				(*v1)[i][j] += (*v2)[i][j]/sqrt((*rmspkernel)[i][j] +rmspropepsilon) * lr;
 				break;
 			case Adam:
 				(*momentumkernel)[i][j] = momentumbeta * (*momentumkernel)[i][j] + (1 - momentumbeta) * (*v2)[i][j];
 				(*rmspkernel)[i][j] = rmspropbeta * (*rmspkernel)[i][j] + (1 - momentumbeta) * pow((*v2)[i][j], 2);
-				(*v1)[i][j] += (*momentumkernel)[i][j] / sqrt((*rmspkernel)[i][j] + rmspropepsilon) * alpha;
+				(*v1)[i][j] += (*momentumkernel)[i][j] / sqrt((*rmspkernel)[i][j] + rmspropepsilon) * lr;
 				break;
 			}
 		}
@@ -604,7 +604,7 @@ void Network::ForwardPropogation(int samplenum,vector<vector<double>> sample, ve
 			//Initialization
 			for (int j = 0; j < layers[i].number; j++)
 			{
-				layers[i].values[j] = layers[i - 1].values[j];
+				layers[i].values[samplenum][j] = layers[i - 1].values[samplenum][j];
 				if (layers[i].values[samplenum][j] == 0)layers[i].values[samplenum][j] = 0.0001;
 			}
 			//Turn off neurons
@@ -686,6 +686,7 @@ void Network::ForwardPropogation(int samplenum,vector<vector<double>> sample, ve
 
 void Network::BackPropogation()
 {
+	
 	//Initial Error
 	short int final_layer = layers.size() - 1;
 
@@ -697,20 +698,20 @@ void Network::BackPropogation()
 			switch (Optimizer)
 			{
 			case No_Optimizer:
-				weights[final_layer - 1][j][i] += alpha * layers[final_layer - 1].values[0][j] * derrors[i];
+				weights[final_layer - 1][j][i] += lr * layers[final_layer - 1].values[0][j] * derrors[i];
 				break;
 			case Momentum:
 				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[0][j] * derrors[i]);
-				weights[final_layer - 1][j][i] += alpha * momentum1D[final_layer - 1][j][i];
+				weights[final_layer - 1][j][i] += lr * momentum1D[final_layer - 1][j][i];
 				break;
 			case RMSProp:
 				rmsp1D[final_layer-1][j][i]= rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[0][j] * derrors[i]),2);
-				weights[final_layer - 1][j][i] += alpha * (layers[final_layer - 1].values[0][j] * derrors[i])/(sqrt(rmsp1D[final_layer - 1][j][i]+rmspropepsilon));
+				weights[final_layer - 1][j][i] += lr * (layers[final_layer - 1].values[0][j] * derrors[i])/(sqrt(rmsp1D[final_layer - 1][j][i]+rmspropepsilon));
 				break;
 			case Adam:
 				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[0][j] * derrors[i]);
 				rmsp1D[final_layer - 1][j][i] = rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[0][j] * derrors[i]), 2);
-				weights[final_layer - 1][j][i] += alpha * momentum1D[final_layer - 1][j][i] / (sqrt(rmsp1D[final_layer - 1][j][i] + rmspropepsilon));
+				weights[final_layer - 1][j][i] += lr * momentum1D[final_layer - 1][j][i] / (sqrt(rmsp1D[final_layer - 1][j][i] + rmspropepsilon));
 				break;
 			
 			}
@@ -718,7 +719,7 @@ void Network::BackPropogation()
 		
 		//Bias Updates
 		if (layers[final_layer].type != Layer::Softmax)
-			biases[final_layer][i] += alpha * derrors[i];
+			biases[final_layer][i] += lr * derrors[i];
 	}
 
 	//Shift errors to values
@@ -762,8 +763,10 @@ void Network::BackPropogation()
 				{
 					sum += layers[i + 1].values[0][k] * weights[i][j][k];
 				}
+				
 				layers[i].values[0][j] = DActivation(layers[i].pre_activation_values[0][j], i) * sum;
 				layers[i - 1].values[0][j] = layers[i].values[0][j];
+
 			}
 
 			else
@@ -784,26 +787,26 @@ void Network::BackPropogation()
 					switch (Optimizer)
 					{
 					case No_Optimizer:
-						weights[i - 1][k][j] += alpha * layers[i].values[0][j] * layers[i - 1].values[0][k];
+						weights[i - 1][k][j] += lr * layers[i].values[0][j] * layers[i - 1].values[0][k];
 						break;
 					case Momentum:
 						momentum1D[i - 1][k][j] = momentumbeta * momentum1D[i - 1][k][j] + (1 - momentumbeta) * (layers[i].values[0][j] * layers[i - 1].values[0][k]);
-						weights[i - 1][k][j] += alpha * momentum1D[i - 1][k][j];
+						weights[i - 1][k][j] += lr * momentum1D[i - 1][k][j];
 						break;
 					case RMSProp:
 						rmsp1D[i - 1][k][j] = rmspropbeta * rmsp1D[i - 1][k][j] + (1 - rmspropbeta) * pow((layers[i].values[0][j] * layers[i - 1].values[0][k]), 2);
-						weights[i - 1][k][j] += alpha * (layers[i].values[0][j] * layers[i - 1].values[0][k]) / (sqrt(rmsp1D[i - 1][k][j]) + rmspropepsilon);
+						weights[i - 1][k][j] += lr * (layers[i].values[0][j] * layers[i - 1].values[0][k]) / (sqrt(rmsp1D[i - 1][k][j]) + rmspropepsilon);
 				 		break;
 				 	case Adam:
 						momentum1D[i - 1][k][j] = momentumbeta * momentum1D[i - 1][k][j] + (1 - momentumbeta) * (layers[i].values[0][j] * layers[i - 1].values[0][k]);
 						rmsp1D[i - 1][k][j] = rmspropbeta * rmsp1D[i - 1][k][j] + (1 - rmspropbeta) * pow((layers[i].values[0][j] * layers[i - 1].values[0][k]), 2);
-						weights[i - 1][k][j] += alpha * momentum1D[i - 1][k][j] / (sqrt(rmsp1D[i - 1][k][j]) + rmspropepsilon);
+						weights[i - 1][k][j] += lr * momentum1D[i - 1][k][j] / (sqrt(rmsp1D[i - 1][k][j]) + rmspropepsilon);
 				 		break;
 					}
 
 					//Bias Updates
 					if (layers[i].type != Layer::Softmax)
-						biases[i][j] += alpha * layers[i].values[0][j];
+						biases[i][j] += lr * layers[i].values[0][j];
 			   	}
 			}
 		}
@@ -948,6 +951,119 @@ void Network::SetInitializer(string init)
 		WeightInitializer = Random;
 
 	return;
+}
+
+void Network::SetLRScheduler(string s)
+{
+	if (!s.compare("No_Scheduler"))
+		LR_Scheduler.type = No_Scheduler;
+	else if (!s.compare("Step_LR"))
+		LR_Scheduler.type = Step_LR;
+	else if (!s.compare("Multi_Step_LR"))
+		LR_Scheduler.type = Multi_Step_LR;
+	else if (!s.compare("Constant_LR"))
+		LR_Scheduler.type = Constant_LR;
+	else if (!s.compare("Linear_LR"))
+		LR_Scheduler.type = Linear_LR;
+	else if (!s.compare("Exponential_LR"))
+		LR_Scheduler.type = Exponential_LR;
+	else if (!s.compare("Reduce_LR_On_Plateau"))
+		LR_Scheduler.type = Reduce_LR_On_Plateau;
+}
+
+void Network::UpdateLearningRate(int epoch)
+{
+	static double prevloss=0;
+	static int patience = 0;
+
+	bool update = false;
+
+	switch (LR_Scheduler.type)
+	{
+	case No_Scheduler:
+		return;
+
+	case Step_LR:
+		if (epoch % LR_Scheduler.step == 0)
+		{
+			lr *= LR_Scheduler.gamma;
+			update = true;
+		}
+		break;
+
+	case Multi_Step_LR:
+		for(auto& i:LR_Scheduler.milestones)
+			if (epoch == i)
+			{
+				lr = lr * LR_Scheduler.gamma;
+				update = true;
+				break;
+			}
+		break;
+
+	case Constant_LR:
+		if (epoch == LR_Scheduler.iterations)
+		{
+			lr *= LR_Scheduler.gamma;
+			update = true;
+		}
+		break;
+
+	case Linear_LR:
+		if (LR_Scheduler.lineardiff == 0)
+			LR_Scheduler.lineardiff = (LR_Scheduler.final_lr-lr) / (double)LR_Scheduler.iterations;
+		if (LR_Scheduler.iterations-- > 0)
+		{
+			lr += LR_Scheduler.lineardiff;
+			update = true;
+		}
+		break;
+
+	case Exponential_LR:
+		lr *= LR_Scheduler.gamma;
+		update = true;
+		break;
+
+	case Reduce_LR_On_Plateau:
+	
+		if (prevloss == 0)
+		{
+			prevloss = epochloss;
+			return;
+		}
+		
+		double diff = epochloss - prevloss;
+		if (abs(diff) < LR_Scheduler.threshold)
+		{
+			if (!LR_Scheduler.mode.compare("min") && diff < 0)
+				patience++;
+			else if (!LR_Scheduler.mode.compare("max") && diff > 0)
+				patience++;
+			else
+				patience = 0;
+		}
+		else
+			patience = 0;
+
+		if (patience >= LR_Scheduler.patience)
+		{
+			lr *= LR_Scheduler.gamma;
+			update = true;
+		}
+
+		prevloss = epochloss;
+		break;
+	}
+
+
+	if (update)
+	{
+		if (lr < LR_Scheduler.min_lr)
+			lr = LR_Scheduler.min_lr;
+
+		cout << "\nNew Learning Rate: " << lr;
+	}
+	
 }
 
 void Network::PrintParameters()
@@ -1523,6 +1639,8 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 
 				//Print Loss
 				cout << "\nLoss: " << epochloss;
+				
+				UpdateLearningRate(l+1);
 				
 				//Alter counters
 				epochloss = 0;
