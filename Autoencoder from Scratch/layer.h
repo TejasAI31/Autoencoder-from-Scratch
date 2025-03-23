@@ -29,8 +29,8 @@ public:
 
 
 	vector<vector<vector<vector<double>>>> kernels;
-	vector<vector<vector<double>>> pre_activation_values2D;
-	vector<vector<vector<double>>> values2D;
+	vector<vector<vector<vector<double>>>> pre_activation_values2D;
+	vector<vector<vector<vector<double>>>> values2D;
 	vector<vector<vector<double>>> values2Dderivative;
 	vector<vector<vector<vector<double>>>> deltakernel;
 	vector<vector<vector<vector<double>>>> momentum2D;
@@ -47,8 +47,8 @@ public:
 	
 	double softmaxsum = 0;
 	double dropout = 0.0;
-	double* values;
-	double* pre_activation_values;
+	vector<vector<double>> values;
+	vector<vector<double>> pre_activation_values;
 
 	layerparams parameters;
 	layertype type;

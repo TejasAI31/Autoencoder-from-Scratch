@@ -54,19 +54,24 @@ public:
 	double** biases;
 	double*** momentum1D;
 	double*** rmsp1D;
-	double* errors;
-	double* derrors;
+	vector<double> errors;
+	vector<double> derrors;
 
 
-	double alpha = 0.1;
+	double alpha = 10e-5;
 	double momentumbeta = 0.9;
 	double rmspropbeta = 0.999;
 	double rmspropepsilon = 10e-10;
 
 	int batchsize;
-	int totalinputsize;
+	long long int totalinputsize;
 	int totalepochs;
 	int batchnum=1;
+
+	int threadcounter = 0;
+	int batchcounter = 0;
+	int epochcounter = 0;
+	double epochloss = 0;
 
 	//Image
 	double MatrixAverage(vector<vector<double>>* mat);
@@ -78,6 +83,8 @@ public:
 	vector<vector<vector<double>>> EmptyUpscale(vector<vector<vector<double>>>* image, int finalwidth, int finalheight);
 
 	//Network
+	void InitializeValueMatrices(int batchsize);
+	void InitializePredictedMatrix(vector<vector<double>>* predicted);
 	double Activation(double x,int i);
 	double DActivation(double x, int i);
 	void AddLayer(Layer l);
@@ -91,8 +98,8 @@ public:
 	void Train(vector<vector<double>> *inputs,vector<vector<double>> *actual,vector<vector<double>>* predicted,int epochs,string loss);
 	void Train(vector<vector<vector<double>>>* inputs, vector<vector<double>>* actual, vector<vector<double>>* predicted, int epochs, string loss);
 	void ShowTrainingStats(vector<vector<double>>* inputs, vector<vector<double>>* actual,int i);
-	void ForwardPropogation(vector<vector<double>> sample, vector<double> actualvalue, vector<vector<double>>* predicted);
-	void ErrorCalculation(vector<double> actualvalue);
+	void ForwardPropogation(int samplenum,vector<vector<double>> sample, vector<double> actualvalue);
+	void ErrorCalculation(int samplenum,vector<double> actualvalue);
 	void AccumulateErrors();
 	double DError(double predictedvalue, double actualvalue, int neuronnum);
 	void CleanErrors();

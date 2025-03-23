@@ -479,8 +479,10 @@ vector<vector<double>> Network::InitializeKernel(int kernelsize, int dilation)
 	return kernel;
 }
 
-void Network::ForwardPropogation(vector<vector<double>> sample, vector<double> actualvalue, vector<vector<double>>* predicted)
+void Network::ForwardPropogation(int samplenum,vector<vector<double>> sample, vector<double> actualvalue)
 {
+
+	//Check Validity of input layer
 	if (layers[0].type != Layer::Input2D&&layers[0].type!=Layer::Input)
 	{
 		cerr << "\n\nLayer 0 is not Input\n\n";
@@ -492,7 +494,7 @@ void Network::ForwardPropogation(vector<vector<double>> sample, vector<double> a
 	switch (layers[0].type)
 	{
 	case Layer::Input2D:
-		layers[0].values2D[0] = sample;
+		layers[0].values2D[samplenum][0] = sample;
 		break;
 
 	case Layer::Input:
@@ -500,14 +502,15 @@ void Network::ForwardPropogation(vector<vector<double>> sample, vector<double> a
 		if (sample[0].size() != layers[0].number)
 		{
 			cerr << "\n\nInput Size " << layers[0].number << " Does Not Match Sample Size "<< sample[0].size() << endl;
-			exit(0);
+			return;
 		}
 
 		for (int i = 0; i < sample[0].size(); i++)
 		{
-			layers[0].values[i] = sample[0][i];
+			layers[0].values[samplenum][i] = sample[0][i];
 		}
 	}
+	
 
 	//Calculate Convolutions
 	for (int i = 1; i < layers.size(); i++)
@@ -520,39 +523,41 @@ void Network::ForwardPropogation(vector<vector<double>> sample, vector<double> a
 			//For all previous convolutions
 			for (int j = 0; j< layers[i].kernelnumber; j++)
 			{
-				for (int k = 0; k < layers[i - 1].values2D.size(); k++)
+				for (int k = 0; k < layers[i - 1].kernelnumber; k++)
 				{
-					vector<vector<double>> convolution = Convolve2D(&layers[i - 1].values2D[k], &layers[i].kernels[j][k]);
-					AddVectors(&layers[i].pre_activation_values2D[j], &convolution);
+					vector<vector<double>> convolution = Convolve2D(&layers[i - 1].values2D[samplenum][k], &layers[i].kernels[j][k]);
+					AddVectors(&layers[i].pre_activation_values2D[samplenum][j], &convolution);
 				}
-				layers[i].values2D[j] = Relu2D(&layers[i].pre_activation_values2D[j]);
+				layers[i].values2D[samplenum][j] = Relu2D(&layers[i].pre_activation_values2D[samplenum][j]);
 			}
 		}
 		else if (layers[i].type == Layer::Pool2D)
 		{
 			//For all previous convolutions
-			for (int j = 0; j < layers[i - 1].values2D.size(); j++)
+			for (int j = 0; j < layers[i - 1].kernelnumber; j++)
 			{
-				MaxPooling2D(&layers[i - 1].values2D[j], layers[i].padding, &layers[i].values2D[j], &layers[i].pre_activation_values2D[j]);
+				MaxPooling2D(&layers[i - 1].values2D[samplenum][j], layers[i].padding, &layers[i].values2D[samplenum][j], &layers[i].pre_activation_values2D[samplenum][j]);
 			}
 		}
 
 		else
 		{
 			//FLATTEN
-			if (layers[i - 1].number == 0)
+			if (layers[i - 1].values[samplenum].size()==0)
 			{
-				layers[i - 1].values = (double*)malloc(sizeof(double) * layers[i - 1].values2D.size() * layers[i - 1].values2D[0].size() * layers[i - 1].values2D[0][0].size());
-				layers[i - 1].number = layers[i - 1].values2D.size() * layers[i - 1].values2D[0].size() * layers[i - 1].values2D[0][0].size();
+				vector<double> temp(layers[i - 1].values2D[samplenum].size() * layers[i - 1].values2D[samplenum][0].size() * layers[i - 1].values2D[samplenum][0][0].size());
+				layers[i - 1].values[samplenum] = temp;
+				layers[i - 1].number = layers[i - 1].values2D[samplenum].size() * layers[i - 1].values2D[samplenum][0].size() * layers[i - 1].values2D[samplenum][0][0].size();
 			}
+
 			unsigned long long int counter = 0;
-			for (int j = 0; j < layers[i - 1].values2D.size(); j++)
+			for (int j = 0; j < layers[i - 1].values2D[samplenum].size(); j++)
 			{
-				for (int k = 0; k < layers[i - 1].values2D[j].size(); k++)
+				for (int k = 0; k < layers[i - 1].values2D[samplenum][j].size(); k++)
 				{
-					for (int l = 0; l < layers[i - 1].values2D[j][k].size(); l++)
+					for (int l = 0; l < layers[i - 1].values2D[samplenum][j][k].size(); l++)
 					{
-						layers[i - 1].values[counter] = layers[i - 1].values2D[j][k][l];
+						layers[i - 1].values[samplenum][counter] = layers[i - 1].values2D[samplenum][j][k][l];
 						counter++;
 					}
 				}
@@ -600,7 +605,7 @@ void Network::ForwardPropogation(vector<vector<double>> sample, vector<double> a
 			for (int j = 0; j < layers[i].number; j++)
 			{
 				layers[i].values[j] = layers[i - 1].values[j];
-				if (layers[i].values[j] == 0)layers[i].values[j] = 0.0001;
+				if (layers[i].values[samplenum][j] == 0)layers[i].values[samplenum][j] = 0.0001;
 			}
 			//Turn off neurons
 			if (totaloff > 0)
@@ -609,9 +614,9 @@ void Network::ForwardPropogation(vector<vector<double>> sample, vector<double> a
 				while (!flag)
 				for (int j = 0; j < layers[i].number; j++)
 				{
-					if (rand() / (double)RAND_MAX < layers[i].dropout && layers[i].values[j] != 0)
+					if (rand() / (double)RAND_MAX < layers[i].dropout && layers[i].values[samplenum][j] != 0)
 					{
-						layers[i].values[j] = 0;
+						layers[i].values[samplenum][j] = 0;
 						if (++off > totaloff)
 						{
 							flag = 1;
@@ -623,8 +628,8 @@ void Network::ForwardPropogation(vector<vector<double>> sample, vector<double> a
 			//Scale Values
 			for (int j = 0; j < layers[i].number; j++)
 			{
-				if (layers[i].values[j] == 0.0001)layers[i].values[j] = 0;
-				if (layers[i].values[j] != 0)layers[i].values[j] *= multrate;
+				if (layers[i].values[samplenum][j] == 0.0001)layers[i].values[samplenum][j] = 0;
+				if (layers[i].values[samplenum][j] != 0)layers[i].values[samplenum][j] *= multrate;
 			}
 		}
 
@@ -636,20 +641,20 @@ void Network::ForwardPropogation(vector<vector<double>> sample, vector<double> a
 				double sum = 0;
 				for (int k = 0; k < layers[i - 1].number; k++)
 				{
-					sum += weights[i - 1][k][j] * layers[i - 1].values[k];
+					sum += weights[i - 1][k][j] * layers[i - 1].values[samplenum][k];
 				}
-				layers[i].pre_activation_values[j] = sum;
+				layers[i].pre_activation_values[samplenum][j] = sum;
 			}
 
 			//Calculate Softsum
 			double softsum = 0;
 			for (int j = 0; j < layers[i].number; j++)
-				softsum += exp(layers[i].pre_activation_values[j]);
+				softsum += exp(layers[i].pre_activation_values[samplenum][j]);
 			layers[i].softmaxsum = softsum;
 			
 			//Calculate Activation Values
 			for (int j = 0; j < layers[i].number; j++)
-				layers[i].values[j] = Activation(layers[i].pre_activation_values[j], i);
+				layers[i].values[samplenum][j] = Activation(layers[i].pre_activation_values[samplenum][j], i);
 		}
 
 		//Sigmoid,Tanh,Relu,etc Cases
@@ -660,32 +665,30 @@ void Network::ForwardPropogation(vector<vector<double>> sample, vector<double> a
 				double sum = 0;
 				for (int k = 0; k < layers[i - 1].number; k++)
 				{
-					sum += weights[i - 1][k][j] * layers[i - 1].values[k];
+					sum += weights[i - 1][k][j] * layers[i - 1].values[samplenum][k];
 				}
 				sum += biases[i][j];
 
-				layers[i].pre_activation_values[j] = sum;
-				layers[i].values[j] = Activation(sum, i);
+				layers[i].pre_activation_values[samplenum][j] = sum;
+				layers[i].values[samplenum][j] = Activation(sum, i);
 			}
 		}
 	}
 
-	//Add Output To The List Of Outputs
-	vector<double> output;
-	for (int x = 0; x < layers.back().number; x++)
-	{
-		output.push_back(layers.back().values[x]);
-	}
-	predicted->push_back(output);
-
 	//Calculate Error
-	ErrorCalculation(actualvalue);
+	ErrorCalculation(samplenum,actualvalue);
+	
+	//Increment ThreadCounter
+	threadcounter++;
+
+	return;
 }
 
 void Network::BackPropogation()
 {
 	//Initial Error
 	short int final_layer = layers.size() - 1;
+
 	for (int i = 0; i < layers[final_layer].number; i++)
 	{
 		for (int j = 0; j < layers[final_layer - 1].number; j++)
@@ -694,30 +697,32 @@ void Network::BackPropogation()
 			switch (Optimizer)
 			{
 			case No_Optimizer:
-				weights[final_layer - 1][j][i] += alpha * layers[final_layer - 1].values[j] * derrors[i];
+				weights[final_layer - 1][j][i] += alpha * layers[final_layer - 1].values[0][j] * derrors[i];
 				break;
 			case Momentum:
-				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[j] * derrors[i]);
+				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[0][j] * derrors[i]);
 				weights[final_layer - 1][j][i] += alpha * momentum1D[final_layer - 1][j][i];
 				break;
 			case RMSProp:
-				rmsp1D[final_layer-1][j][i]= rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[j] * derrors[i]),2);
-				weights[final_layer - 1][j][i] += alpha * (layers[final_layer - 1].values[j] * derrors[i])/(sqrt(rmsp1D[final_layer - 1][j][i]+rmspropepsilon));
+				rmsp1D[final_layer-1][j][i]= rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[0][j] * derrors[i]),2);
+				weights[final_layer - 1][j][i] += alpha * (layers[final_layer - 1].values[0][j] * derrors[i])/(sqrt(rmsp1D[final_layer - 1][j][i]+rmspropepsilon));
 				break;
 			case Adam:
-				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[j] * derrors[i]);
-				rmsp1D[final_layer - 1][j][i] = rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[j] * derrors[i]), 2);
+				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[0][j] * derrors[i]);
+				rmsp1D[final_layer - 1][j][i] = rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[0][j] * derrors[i]), 2);
 				weights[final_layer - 1][j][i] += alpha * momentum1D[final_layer - 1][j][i] / (sqrt(rmsp1D[final_layer - 1][j][i] + rmspropepsilon));
 				break;
 			
 			}
 		}
-
+		
 		//Bias Updates
 		if (layers[final_layer].type != Layer::Softmax)
 			biases[final_layer][i] += alpha * derrors[i];
 	}
 
+	//Shift errors to values
+	layers.back().values[0] = derrors;
 
 	int convstart = 0;
 	for (int i = final_layer - 1; i > 0; i--)
@@ -732,9 +737,9 @@ void Network::BackPropogation()
 				long long int sum = 0;
 				for (int k = 0; k < layers[i + 1].number; k++)
 				{
-					sum += layers[i + 1].values[k] * weights[i][j][k];
+					sum += layers[i + 1].values[0][k] * weights[i][j][k];
 				}
-				layers[i].values[j] = sum;
+				layers[i].values[0][j] = sum;
 			}
 			break;
 		}
@@ -746,19 +751,19 @@ void Network::BackPropogation()
 			if (layers[i].type == Layer::Dropout)
 			{
 				//Off Neuron
-				if (layers[i].values[j] == 0)
+				if (layers[i].values[0][j] == 0)
 				{
-					layers[i - 1].values[j] = 0;
+					layers[i - 1].values[0][j] = 0;
 					continue;
 				}
 
 				double sum = 0;
 				for (int k = 0; k < layers[i + 1].number; k++)
 				{
-					sum += layers[i + 1].values[k] * weights[i][j][k];
+					sum += layers[i + 1].values[0][k] * weights[i][j][k];
 				}
-				layers[i].values[j] = DActivation(layers[i].pre_activation_values[j], i) * sum;
-				layers[i - 1].values[j] = layers[i].values[j];
+				layers[i].values[0][j] = DActivation(layers[i].pre_activation_values[0][j], i) * sum;
+				layers[i - 1].values[0][j] = layers[i].values[0][j];
 			}
 
 			else
@@ -768,9 +773,9 @@ void Network::BackPropogation()
 					double sum = 0;
 					for (int k = 0; k < layers[i + 1].number; k++)
 					{
-						sum += layers[i + 1].values[k] * weights[i][j][k];
+						sum += layers[i + 1].values[0][k] * weights[i][j][k];
 					}
-					layers[i].values[j] = DActivation(layers[i].pre_activation_values[j], i) * sum;
+					layers[i].values[0][j] = DActivation(layers[i].pre_activation_values[0][j], i) * sum;
 				}
 
 				for (int k = 0; k < layers[i - 1].number; k++)
@@ -779,26 +784,26 @@ void Network::BackPropogation()
 					switch (Optimizer)
 					{
 					case No_Optimizer:
-						weights[i - 1][k][j] += alpha * layers[i].values[j] * layers[i - 1].values[k];
+						weights[i - 1][k][j] += alpha * layers[i].values[0][j] * layers[i - 1].values[0][k];
 						break;
 					case Momentum:
-						momentum1D[i - 1][k][j] = momentumbeta * momentum1D[i - 1][k][j] + (1 - momentumbeta) * (layers[i].values[j] * layers[i - 1].values[k]);
+						momentum1D[i - 1][k][j] = momentumbeta * momentum1D[i - 1][k][j] + (1 - momentumbeta) * (layers[i].values[0][j] * layers[i - 1].values[0][k]);
 						weights[i - 1][k][j] += alpha * momentum1D[i - 1][k][j];
 						break;
 					case RMSProp:
-						rmsp1D[i - 1][k][j] = rmspropbeta * rmsp1D[i - 1][k][j] + (1 - rmspropbeta) * pow((layers[i].values[j] * layers[i - 1].values[k]), 2);
-						weights[i - 1][k][j] += alpha * (layers[i].values[j] * layers[i - 1].values[k]) / (sqrt(rmsp1D[i - 1][k][j]) + rmspropepsilon);
+						rmsp1D[i - 1][k][j] = rmspropbeta * rmsp1D[i - 1][k][j] + (1 - rmspropbeta) * pow((layers[i].values[0][j] * layers[i - 1].values[0][k]), 2);
+						weights[i - 1][k][j] += alpha * (layers[i].values[0][j] * layers[i - 1].values[0][k]) / (sqrt(rmsp1D[i - 1][k][j]) + rmspropepsilon);
 				 		break;
 				 	case Adam:
-						momentum1D[i - 1][k][j] = momentumbeta * momentum1D[i - 1][k][j] + (1 - momentumbeta) * (layers[i].values[j] * layers[i - 1].values[k]);
-						rmsp1D[i - 1][k][j] = rmspropbeta * rmsp1D[i - 1][k][j] + (1 - rmspropbeta) * pow((layers[i].values[j] * layers[i - 1].values[k]), 2);
+						momentum1D[i - 1][k][j] = momentumbeta * momentum1D[i - 1][k][j] + (1 - momentumbeta) * (layers[i].values[0][j] * layers[i - 1].values[0][k]);
+						rmsp1D[i - 1][k][j] = rmspropbeta * rmsp1D[i - 1][k][j] + (1 - rmspropbeta) * pow((layers[i].values[0][j] * layers[i - 1].values[0][k]), 2);
 						weights[i - 1][k][j] += alpha * momentum1D[i - 1][k][j] / (sqrt(rmsp1D[i - 1][k][j]) + rmspropepsilon);
 				 		break;
 					}
 
 					//Bias Updates
 					if (layers[i].type != Layer::Softmax)
-						biases[i][j] += alpha * layers[i].values[j];
+						biases[i][j] += alpha * layers[i].values[0][j];
 			   	}
 			}
 		}
@@ -811,15 +816,15 @@ void Network::BackPropogation()
 
 	//UNFLATTEN
 	unsigned long long int counter = 0;
-	for (int i = 0; i < layers[convstart].values2D.size(); i++)
+	for (int i = 0; i < layers[convstart].values2D[0].size(); i++)
 	{
 		vector<vector<double>> derivative;
-		for (int j = 0; j < layers[convstart].values2D[i].size(); j++)
+		for (int j = 0; j < layers[convstart].values2D[0][i].size(); j++)
 		{
 			vector<double> row;
-			for (int k = 0; k < layers[convstart].values2D[i][j].size(); k++)
+			for (int k = 0; k < layers[convstart].values2D[0][i][j].size(); k++)
 			{
-				row.push_back(layers[convstart].values[counter]);
+				row.push_back(layers[convstart].values[0][counter]);
 				counter++;
 			}
 			derivative.push_back(row);
@@ -835,10 +840,10 @@ void Network::BackPropogation()
 		{
 			for (int j = 0; j < layers[i].kernelnumber; j++)
 			{
-				for (int k = 0; k < layers[i - 1].values2D.size(); k++)
+				for (int k = 0; k < layers[i - 1].kernelnumber; k++)
 				{
 					//Calculate Change
-					layers[i].deltakernel[j][k] = Convolve2D(&layers[i - 1].values2D[k], &layers[i].values2Dderivative[j]);
+					layers[i].deltakernel[j][k] = Convolve2D(&layers[i - 1].values2D[0][k], &layers[i].values2Dderivative[j]);
 					vector<vector<double>> rotatedfilter = Rotate(&layers[i].kernels[j][k]);
 					vector<vector<double>> delta2D = FullConvolve2D(&rotatedfilter, &layers[i].values2Dderivative[j]);
 
@@ -852,26 +857,26 @@ void Network::BackPropogation()
 		//Pooling Case
 		else if (layers[i].type == Layer::Pool2D)
 		{
-			for (int h = 0; h < layers[i].values2D.size(); h++)
+			for (int h = 0; h < layers[i].values2D[0].size(); h++)
 			{
 				if (layers[i - 1].values2Dderivative[h].size() == 0)
 				{
-					for (int m = 0; m < layers[i - 1].values2D[h].size(); m++)
+					for (int m = 0; m < layers[i - 1].values2D[0][h].size(); m++)
 					{
-						vector<double> row(layers[i - 1].values2D[h][m].size());
+						vector<double> row(layers[i - 1].values2D[0][h][m].size());
 						layers[i - 1].values2Dderivative[h].push_back(row);
 					}
 				}
 
-				for (int j = 0; j < layers[i].values2D[0].size(); j++)
+				for (int j = 0; j < layers[i].values2D[0][0].size(); j++)
 				{
-					for (int k = 0; k < layers[i].values2D[0][0].size(); k++)
+					for (int k = 0; k < layers[i].values2D[0][0][0].size(); k++)
 					{
 						for (int l = 0; l < layers[i].padding; l++)
 						{
 							for (int m = 0; m < layers[i].padding; m++)
 							{
-								if (layers[i].pre_activation_values2D[h][j + l][k + m])
+								if (layers[i].pre_activation_values2D[0][h][j + l][k + m])
 									layers[i - 1].values2Dderivative[h][j + l][k + m] = layers[i].values2Dderivative[h][j][k];
 							}
 						}
@@ -880,7 +885,7 @@ void Network::BackPropogation()
 			}
 		}
 	}
-
+	
 	CleanLayers();
 }
 
@@ -892,25 +897,21 @@ void Network::AddLayer(Layer l)
 
 void Network::CleanLayers()
 {
+	for(int b=0;b<batchsize;b++)
 	for (int i = 0; i < layers.size(); i++)
 	{
 		if (layers[i].type == Layer::Conv)
 		{
-			for (int j = 0; j < layers[i].pre_activation_values2D.size(); j++)
+			for (int j = 0; j < layers[i].pre_activation_values2D[b].size(); j++)
 			{
-				for (int k = 0; k < layers[i].pre_activation_values2D[j].size(); k++)
+				for (int k = 0; k < layers[i].pre_activation_values2D[b][j].size(); k++)
 				{
-					for (int l = 0; l < layers[i].pre_activation_values2D[j][k].size(); l++)
+					for (int l = 0; l < layers[i].pre_activation_values2D[b][j][k].size(); l++)
 					{
-						layers[i].pre_activation_values2D[j][k][l] = 0;
+						layers[i].pre_activation_values2D[b][j][k][l] = 0;
 					}
 				}
 			}
-		}
-
-		if (layers[i].type == Layer::Pool2D)
-		{
-
 		}
 
 	}
@@ -990,10 +991,8 @@ void Network::Initialize()
 {
 	//Layer 0 Initialisation
 	vector<vector<double>> temp;
-	layers[0].values2D.push_back(temp);
+	layers[0].kernelnumber = 1;
 	layers[0].values2Dderivative.push_back(temp);
-	layers[0].values = (double*)malloc(sizeof(double) * layers[0].number);
-	layers[0].pre_activation_values = (double*)malloc(sizeof(double) * layers[0].number);
 
 	//Parameter Initialisation
 	weights = (double***)malloc(sizeof(double**) * layers.size() - 1);
@@ -1015,7 +1014,10 @@ void Network::Initialize()
 				layers[x].momentum2D.push_back(kernelset);
 				layers[x].rmsp2D.push_back(kernelset);
 
-				for (int j = 0; j < layers[x - 1].values2D.size(); j++)
+				vector<vector<double>> difftemp;
+				layers[x].values2Dderivative.push_back(temp);
+
+				for (int j = 0; j < layers[x - 1].kernelnumber; j++)
 				{
 					vector<vector<double>> kernel=InitializeKernel(layers[x].kernelsize,layers[x].dilation);
 					vector<vector<double>> deltaker;
@@ -1030,25 +1032,15 @@ void Network::Initialize()
 					layers[x].rmsp2D[i].push_back(momentumkernel);
 				}
 			}
-
-			//Value Matrices
-			for (int j = 0; j < layers[x].kernelnumber; j++)
-			{
-				vector<vector<double>> temp;
-				layers[x].pre_activation_values2D.push_back(temp);
-				layers[x].values2D.push_back(temp);
-				layers[x].values2Dderivative.push_back(temp);
-			}
 		}
 
 		//Check for Pooling2D
 		else if (layers[x].type == Layer::Pool2D)
 		{
-			for (int i = 0; i < layers[x - 1].values2D.size(); i++)
+			layers[x].kernelnumber = layers[x - 1].kernelnumber;
+			for (int i = 0; i < layers[x - 1].kernelnumber; i++)
 			{
 				vector<vector<double>> temp;
-				layers[x].pre_activation_values2D.push_back(temp);
-				layers[x].values2D.push_back(temp);
 				layers[x].values2Dderivative.push_back(temp);
 			}
 		}
@@ -1065,10 +1057,6 @@ void Network::Initialize()
 					exit(0);
 				}
 				layers[x].number = layers[x - 1].number;
-
-				//Values
-				layers[x].values = (double*)malloc(sizeof(double) * layers[x].number);
-				layers[x].pre_activation_values = (double*)malloc(sizeof(double) * layers[x].number);
 
 				//Weights
 				weights[x] = (double**)malloc(sizeof(double*) * layers[x].number);
@@ -1096,9 +1084,6 @@ void Network::Initialize()
 			}
 			else
 			{
-				//Values
-				layers[x].values = (double*)malloc(sizeof(double) * layers[x].number);
-				layers[x].pre_activation_values = (double*)malloc(sizeof(double) * layers[x].number);
 
 				//Weights
 				weights[x] = (double**)malloc(sizeof(double*) * layers[x].number);
@@ -1134,8 +1119,6 @@ void Network::Initialize()
 	}
 
 	//Last Layer
-	layers.back().values = (double*)malloc(sizeof(double) * layers.back().number);
-	layers.back().pre_activation_values = (double*)malloc(sizeof(double) * layers.back().number);
 	biases[layers.size() - 1] = (double*)malloc(sizeof(double) * layers.back().number);
 	for (int j = 0; j < layers.back().number; j++)
 	{
@@ -1143,14 +1126,53 @@ void Network::Initialize()
 	}
 
 	//Errors
-	errors = (double*)malloc(sizeof(double) * layers[layers.size() - 1].number);
-	derrors = (double*)malloc(sizeof(double) * layers[layers.size() - 1].number);
 	for (int x = 0; x < layers[layers.size() - 1].number; x++)
 	{
-		errors[x] = 0;
-		derrors[x] = 0;
+		errors.push_back(0);
+		derrors.push_back(0);
 	}
 
+}
+
+void Network::InitializeValueMatrices(int batchsize)
+{
+	for (int t = 0; t < batchsize; t++)
+	{
+		//Row 0
+		vector<vector<vector<double>>> temp2Dsetinit;
+
+		vector<vector<double>>temp2D;
+		temp2Dsetinit.push_back(temp2D);
+		
+		layers[0].values2D.push_back(temp2Dsetinit);
+		layers[0].pre_activation_values2D.push_back(temp2Dsetinit);
+
+		for (int i = 0; i < layers.size(); i++)
+		{
+			vector<double> temp(layers[i].number);
+			layers[i].values.push_back(temp);
+			layers[i].pre_activation_values.push_back(temp);
+
+			vector<vector<vector<double>>> temp2Dset;
+			for (int j = 0; j < layers[i].kernelnumber; j++)
+			{
+				vector<vector<double>>temp2D;
+				temp2Dset.push_back(temp2D);
+			}
+			layers[i].values2D.push_back(temp2Dset);
+			layers[i].pre_activation_values2D.push_back(temp2Dset);
+		}
+	}
+}
+
+void Network::InitializePredictedMatrix(vector<vector<double>>* predicted)
+{
+	for(int j=0;j<totalepochs;j++)
+	for (int i = 0; i < totalinputsize; i++)
+	{
+		vector<double> temp(layers.back().number);
+		predicted->push_back(temp);
+	}
 }
 
 double Network::WeightInitialization(int fan_in, int fan_out)
@@ -1177,6 +1199,7 @@ void Network::Compile(string type)
 	if (!type.compare("Stochastic"))
 	{
 		gradient_descent_type = Stochastic;
+		batchsize = 1;
 	}
 	else if(!type.compare("Batch"))
 	{
@@ -1185,6 +1208,7 @@ void Network::Compile(string type)
 	else
 	{
 		cerr << "Mini Batch Gradient Descent Requires A Defined Batch Size" << endl;
+		exit(0);
 	}
 	Initialize();
 }
@@ -1237,7 +1261,7 @@ double Network::Activation(double x,int i)
 	}
 }
 
-void Network::ErrorCalculation(vector<double> actualvalue)
+void Network::ErrorCalculation(int samplenum,vector<double> actualvalue)
 {
 	static double avgerror = 0;
 	static int counter = 0;
@@ -1250,28 +1274,28 @@ void Network::ErrorCalculation(vector<double> actualvalue)
 		switch (model_loss_type)
 		{
 			case Mean_Squared:
-				error = pow(layers.back().values[i] - actualvalue[i], 2) / 2;
+				error = pow(layers.back().values[samplenum][i] - actualvalue[i], 2) / 2;
 				break;
 			case Mean_Absolute:
-				error = abs(layers.back().values[i] - actualvalue[i]);
+				error = abs(layers.back().values[samplenum][i] - actualvalue[i]);
 				break;
 			case Mean_Biased:
-				error = actualvalue[i]- layers.back().values[i];
+				error = actualvalue[i]- layers.back().values[samplenum][i];
 				break;
 			case Root_Mean_Squared:
-				error= pow(layers.back().values[i] - actualvalue[i], 2)/2;
+				error= pow(layers.back().values[samplenum][i] - actualvalue[i], 2)/2;
 				break;
 		}
 
 		if (gradient_descent_type == Stochastic)
 		{
 			errors[i] = error;
-			derrors[i] = DActivation(layers.back().pre_activation_values[i], layers.size() - 1) * DError(layers.back().values[i], actualvalue[i], i);
+			derrors[i] = DActivation(layers.back().pre_activation_values[samplenum][i], layers.size() - 1) * DError(layers.back().values[samplenum][i], actualvalue[i], i);
 		}
 		else
 		{
 			errors[i] += error;
-			derrors[i] += DActivation(layers.back().pre_activation_values[i], layers.size() - 1) * DError(layers.back().values[i], actualvalue[i], i);
+			derrors[i] += DActivation(layers.back().pre_activation_values[samplenum][i], layers.size() - 1) * DError(layers.back().values[samplenum][i], actualvalue[i], i);
 
 		}
 
@@ -1283,17 +1307,11 @@ void Network::ErrorCalculation(vector<double> actualvalue)
 	counter++;
 	totalcounter++;
 	
-	if (counter % 100==0)
-	{
-		cout << totalcounter<<". Average Error : " << avgerror/(double)counter << endl;
-		avgerror = 0;
-		counter = 0;
-	}
 }
 
 void Network::AccumulateErrors()
 {
-
+	double errorsum = 0;
 	for (int i = 0; i < layers.back().number; i++)
 	{
 		switch (model_loss_type)
@@ -1301,15 +1319,17 @@ void Network::AccumulateErrors()
 			case Root_Mean_Squared:
 				errors[i] = sqrt(errors[i]/(double)(2*batchsize));
 				derrors[i] /=(double)(batchsize * 2 * errors[i]);
+				errorsum += errors[i];
 				break;
 			case Mean_Squared:
 			case Mean_Absolute:
 			case Mean_Biased:
 				derrors[i] /= (double)batchsize;
+				errorsum += errors[i];
 				break;
 		}
 	}
-	
+	epochloss += errorsum/(double)totalinputsize;
 }
 
 double Network::DError(double predictedvalue, double actualvalue,int neuronnum)
@@ -1357,7 +1377,7 @@ void Network::ShowTrainingStats(vector<vector<double>>* inputs, vector<vector<do
 	cout << "\tPredicted: ";
 	for (int j = 0; j < layers[layers.size() - 1].number; j++)
 	{
-		cout << layers[layers.size() - 1].values[j] << " ";
+		cout << layers[layers.size() - 1].values[0][j] << " ";
 	}
 
 	cout << "\tActual: ";
@@ -1420,85 +1440,103 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 	
 	switch (gradient_descent_type)
 	{
+
+		case Batch:batchsize = totalinputsize;
 		case Stochastic:
-			for (int l = 0; l < epochs; l++)
-			{
-				for (int i = 0; i < totalinputsize; i++)
-				{
-					//Taking the sample
-					vector<vector<double>> sample;
-					if (inputs->size() == 1)
-					{
-						sample = { (*inputs)[0][i] };
-					}
-					else
-					{
-						sample = (*inputs)[i];
-					}
-					vector<double> actualvalue = (*actual)[i];
-
-					ForwardPropogation(sample, actualvalue, predicted);
-
-					//if (displayparameters == Text)
-						//ShowTrainingStats(inputs, actual, i);
-
-					BackPropogation();
-				}
-			}
-			break;
-
-
-		case Batch:
-			batchsize= totalinputsize;
-			for (int l = 0; l < epochs; l++)
-			{
-				for (int i = 0; i < batchsize; i++)
-				{
-					//Taking the sample
-					vector<vector<double>> sample = (*inputs)[i];
-					vector<double> actualvalue = (*actual)[i];
-
-					ForwardPropogation(sample, actualvalue, predicted);
-
-					//if (displayparameters == Text)
-						//ShowTrainingStats(inputs, actual, i);
-
-				}
-				AccumulateErrors();
-				BackPropogation();
-				CleanErrors();
-			}
-			break;
-
-
 		case Mini_Batch:
-			batchnum = ceil(totalinputsize / (float)batchsize);
-			cout << "Total Batches= " << batchnum << "\n\n";
+
+			//Calculate Batch Sizes
+			batchnum = totalinputsize / (float)batchsize;
+			cout << "Total Batches= " << batchnum << "\n";
+			cout << "Batch Size= " << batchsize;
+
+			cout << "\n\nTraining Started";
+			cout << "\n----------------";
+
+			//Initialize Value Matrices
+			InitializeValueMatrices(batchsize);
+
+			int threaddeaths = 0;
+			double averagetime = 0;
 			for (int l = 0; l < epochs; l++)
 			{
+				cout << "\n\nEpoch: " << l + 1 << "\n";
+
 				for (int j = 0; j < batchnum; j++)
 				{
 					for (int i = 0; i < batchsize; i++)
 					{
-						if (j * batchsize + i < inputs->size())
+
+						//Taking the sample
+						vector<vector<double>> sample;
+
+						//Check for 1D or 2D
+						if (inputs->size() == 1)
 						{
-							//Taking the sample
-							vector<vector<double>> sample = (*inputs)[j*batchsize+i];
-							vector<double> actualvalue = (*actual)[j*batchsize+i];
-
-							ForwardPropogation(sample, actualvalue, predicted);
-
-							//if (displayparameters == Text)
-							//ShowTrainingStats(inputs, actual, i);
+							sample = { (*inputs)[0][j * batchsize + i] };
 						}
-						else break;
+						else
+						{
+							sample = (*inputs)[j * batchsize + i];
+						}
+
+						//Actual Value
+						vector<double> actualvalue = (*actual)[j*batchsize+i];
+
+						//First Pass for flattening weights
+						if(threadcounter<1)
+							ForwardPropogation(i,sample, actualvalue);
+						else
+						{
+							thread t(&Network::ForwardPropogation, this, i, sample, actualvalue);
+							t.detach();
+						}
+						//if (displayparameters == Text)
+						//ShowTrainingStats(inputs, actual, i);
+
 					}
+
+					//Show Batch Status
+					cout << "\r"<<"Batch " << j+1 << " / " << batchnum;
+
+					//Check Thread Deaths
+					double batchtime = 0;
+					while (threadcounter < batchsize) {
+						if (averagetime > 0 && batchtime > 10 * averagetime)
+						{
+							threaddeaths++;
+							break;
+						}
+						batchtime += 10e-10;
+					};
+					averagetime = batchtime;
+
+					//Reset Counters
+					threadcounter = 0;
+					batchcounter++;
+
+					//Backprop
 					AccumulateErrors();
 					BackPropogation();
 					CleanErrors();
 				}
+
+				//Print Loss
+				cout << "\nLoss: " << epochloss;
+				
+				//Alter counters
+				epochloss = 0;
+				batchcounter = 0;
+				epochcounter++;
 			}
+
+			//Display Thread Deaths
+			cout << "\n\nTraining Completed";
+			cout << "\n------------------\n\n";
+			cout << "Total Thread Deaths: " << threaddeaths << "/" << totalinputsize << endl;
 			break;
 	}
+
+	epochcounter = 0;
 }
 //

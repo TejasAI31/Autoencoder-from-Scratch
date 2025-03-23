@@ -307,7 +307,7 @@ void Display2D(vector<vector<vector<double>>>* input, vector<int> inputdims, vec
 	{
 		mousepos = GetMousePosition();
 		framecounter++;
-		if (framecounter == 40)
+		if (framecounter == 10)
 		{
 			framecounter = 0;
 			if (autotransition)
@@ -422,14 +422,14 @@ int main()
 	//Autoencoder
 	srand(time(NULL));
 
-	
-	//2D Variant
 	/*
+	//2D Variant
+
 	vector<vector<vector<double>>> input;
 	vector<vector<double>> actual;
 	vector<vector<double>> predicted;
 	
-	CreateMnistDataset2D(&input, &actual, 300);
+	CreateMnistDataset2D(&input, &actual, 1000);
 	AddNoise2D(&input);
 
 	//Model
@@ -440,14 +440,14 @@ int main()
 	model.AddLayer(Layer(32, "Tanh"));
 	model.AddLayer(Layer(28 * 28, "Relu"));
 
-	model.Compile("Stochastic");
+	model.Compile("Mini Batch",32);
 	model.Summary();
 
-	model.SetOptimizer("RMSProp");
+	model.SetOptimizer("Adam");
 	model.alpha=0.0005;
-	model.Train(&input, &actual,&predicted,1, "MSE");
+	model.Train(&input, &actual,&predicted,50, "MSE");
 
-	Display2D(&input, { 28,28 },&predicted,{28,28}, &actual,model.totalepochs);
+	//Display2D(&input, { 28,28 },&predicted,{28,28}, &actual,model.totalepochs);
 	*/
 
 	
@@ -456,7 +456,7 @@ int main()
 	vector<vector<double>> actual;
 	vector<vector<double>> predicted;
 
-	CreateMnistDataset(&input, &actual, 1000);
+	CreateMnistDataset(&input, &actual, 50000);
 	AddNoise(&input);
 
 	Network model;
@@ -467,14 +467,14 @@ int main()
 	model.AddLayer(Layer(28 * 28, "Relu"));
 
 	model.SetInitializer("Glorot");
-	model.SetOptimizer("RMSProp");
+	model.SetOptimizer("Adam");
 
-	model.Compile("Stochastic");
-	model.alpha = 0.002;
+	model.Compile("Mini Batch",256);
+	model.alpha = 0.00001;
 	model.Summary();
 
-	model.Train(&input, &actual, &predicted, 1, "MSE");
+	model.Train(&input, &actual, &predicted, 100, "MSE");
 
-	Display(&input, { 28,28 },&predicted,{28,28} ,&actual);
+	//Display(&input, { 28,28 },&predicted,{28,28} ,&actual);
 	
 }
