@@ -35,9 +35,21 @@ public:
 		int step = 5;
 
 		double lineardiff = 0;
-		
-		
 	}lr_scheduler;
+
+	typedef enum regularizer_type {
+		No_Regularizer,
+		L1,
+		L2,
+		Elastic_Net
+	}regularizer_type;
+
+	typedef struct regularizer {
+		regularizer_type type = No_Regularizer;
+		double L1_Lambda = 0.01;
+		double L2_Lambda = 0.1;
+		double Elastic_Net_Alpha = 0.5;
+	}regularizer;
 	
 	typedef enum gradtype {
 		Stochastic,
@@ -75,6 +87,7 @@ public:
 	showparams displayparameters;
 
 	lr_scheduler LR_Scheduler;
+	regularizer Regularizer;
 	optimizer Optimizer;
 	weightinitializer WeightInitializer;
 
@@ -113,6 +126,10 @@ public:
 	vector<vector<vector<double>>> EmptyUpscale(vector<vector<vector<double>>>* image, int finalwidth, int finalheight);
 
 	//Network
+	string GetInitializerName();
+	string GetRegularizerName();
+	string GetOptimizerName();
+	string GetLRSchedulerName();
 	void InitializeValueMatrices(int batchsize);
 	void InitializePredictedMatrix(vector<vector<double>>* predicted);
 	double Activation(double x,int i);
@@ -120,6 +137,7 @@ public:
 	void AddLayer(Layer l);
 	void SetDisplayParameters(string s);
 	void SetLRScheduler(string s);
+	void SetRegularizer(string s);
 	void UpdateLearningRate(int epoch);
 	void Summary();
 	void PrintParameters();
@@ -139,8 +157,9 @@ public:
 	void LeakyReluParameters(double i, double a);
 	void SetOptimizer(string opt);
 	void SetInitializer(string init);
-	vector<vector<double>> FullConvolve2D(vector<vector<double>>* input, vector<vector<double>>* kernel);
-	vector<vector<double>> Convolve2D(vector<vector<double>> *input, vector<vector<double>> *kernel);
+	vector<vector<double>> FullConvolve2D(vector<vector<double>>* input, vector<vector<double>>* kernel,int stride);
+	vector<vector<double>> Convolve2D(vector<vector<double>> *input, vector<vector<double>> *kernel,int stride);
+	vector<vector<double>> Dilate2D(vector<vector<double>>* input, int dilation);
 	vector<vector<double>> Rotate(vector<vector<double>>* input);
 	vector<vector<double>> Zero2DMatrix(int x, int y);
 	void AddVectors(vector<vector<double>>* v1, vector<vector<double>>* v2);

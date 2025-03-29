@@ -130,8 +130,8 @@ vector<vector<vector<double>>> Network::SobelEdgeDetection(vector<vector<vector<
 	
 	for (int x = 0; x < image->size(); x++)
 	{
-		vector<vector<double>> xedges = Convolve2D(&((*image)[x]), &sobelx);
-		vector<vector<double>> yedges = Convolve2D(&((*image)[x]), &sobely);
+		vector<vector<double>> xedges = Convolve2D(&((*image)[x]), &sobelx,1);
+		vector<vector<double>> yedges = Convolve2D(&((*image)[x]), &sobely,1);
 		vector<vector<double>> magnitude = PixelDistances(&xedges, &yedges);
 		
 		double threshold = MatrixAverage(&magnitude);
@@ -167,8 +167,8 @@ vector<vector<vector<double>>> Network::PrewittEdgeDetection(vector<vector<vecto
 
 	for (int x = 0; x < image->size(); x++)
 	{
-		vector<vector<double>> xedges = Convolve2D(&((*image)[x]), &prewittx);
-		vector<vector<double>> yedges = Convolve2D(&((*image)[x]), &prewitty);
+		vector<vector<double>> xedges = Convolve2D(&((*image)[x]), &prewittx,1);
+		vector<vector<double>> yedges = Convolve2D(&((*image)[x]), &prewitty,1);
 		vector<vector<double>> magnitude = PixelDistances(&xedges, &yedges);
 
 		double threshold = MatrixAverage(&magnitude);
@@ -272,7 +272,7 @@ vector<vector<vector<double>>> Network::BilinearInterpolation(vector<vector<vect
 }
 
 //Convolution Functions
-vector<vector<double>> Network::Convolve2D(vector<vector<double>> *input, vector<vector<double>> *kernel)
+vector<vector<double>> Network::Convolve2D(vector<vector<double>> *input, vector<vector<double>> *kernel,int stride)
 {
 	short int kernelsize = kernel->size();
 	short int columns = input->size();
@@ -280,10 +280,10 @@ vector<vector<double>> Network::Convolve2D(vector<vector<double>> *input, vector
 
 	vector<vector<double>> output;
 
-	for (int y = 0; y <= columns -columns% kernelsize; y++)
+	for (int y = 0; y <= columns -columns% kernelsize; y+=stride)
 	{
 		vector<double> row;
-		for (int x = 0; x <= rows - rows%kernelsize; x++)
+		for (int x = 0; x <= rows - rows%kernelsize; x+=stride)
 		{
 			double value = 0;
 			for (int i = 0; i < kernelsize; i++)
@@ -304,7 +304,7 @@ vector<vector<double>> Network::Convolve2D(vector<vector<double>> *input, vector
 	return output;
 }
 
-vector<vector<double>> Network::FullConvolve2D(vector<vector<double>>* input, vector<vector<double>>* kernel)
+vector<vector<double>> Network::FullConvolve2D(vector<vector<double>>* input, vector<vector<double>>* kernel,int stride)
 {
 	short int kernelsize = kernel->size();
 	short int columns = input->size();
@@ -314,10 +314,10 @@ vector<vector<double>> Network::FullConvolve2D(vector<vector<double>>* input, ve
 
 	vector<vector<double>> output;
 
-	for (int y = 1-columns; y < 2*columns - kernelsize + columnpadding; y++)
+	for (int y = 1-columns; y < 2*columns - kernelsize + columnpadding; y+=stride)
 	{
 		vector<double> row;
-		for (int x = 1-rows; x < 2*rows - kernelsize + rowpadding; x++)
+		for (int x = 1-rows; x < 2*rows - kernelsize + rowpadding; x+=stride)
 		{
 			double value = 0;
 			for (int i = 0; i < kernelsize; i++)
@@ -460,6 +460,37 @@ void Network::UpdateKernel(vector<vector<double>>* v1, vector<vector<double>>* v
 	return;
 }
 
+vector<vector<double>> Network::Dilate2D(vector<vector<double>>* input, int dilation)
+{
+	vector<vector<double>> output;
+
+	int rows = input->size();
+	int cols = (*input)[0].size();
+
+	int rowpos = 0;
+	int colpos = 0;
+
+	for (int j = 0; j < rows + (dilation - 1) * (rows - 1); j++)
+	{
+		vector<double> row;
+		for (int i = 0; i < cols + (dilation - 1) * (cols - 1); i++)
+		{
+			if (i % dilation == 0 && j % dilation == 0)
+			{
+				row.push_back((*input)[rowpos][colpos]);
+				colpos++;
+			}
+			else
+				row.push_back(0);
+		}
+		colpos = 0;
+		if(j%dilation==0)
+		rowpos++;
+		output.push_back(row);
+	}
+	return output;
+}
+
 vector<vector<double>> Network::InitializeKernel(int kernelsize, int dilation)
 {
 	vector<vector<double>> kernel;
@@ -469,7 +500,7 @@ vector<vector<double>> Network::InitializeKernel(int kernelsize, int dilation)
 		vector<double> row;
 		for (int k = 0; k < kernelsize + (dilation - 1) * (kernelsize - 1); k++)
 		{
-			if (k % dilation == 0 && k % dilation == 0)
+			if (k % dilation == 0 && j % dilation == 0)
 				row.push_back((float)rand() / (float)RAND_MAX);
 			else
 				row.push_back(0);
@@ -525,7 +556,7 @@ void Network::ForwardPropogation(int samplenum,vector<vector<double>> sample, ve
 			{
 				for (int k = 0; k < layers[i - 1].kernelnumber; k++)
 				{
-					vector<vector<double>> convolution = Convolve2D(&layers[i - 1].values2D[samplenum][k], &layers[i].kernels[j][k]);
+					vector<vector<double>> convolution = Convolve2D(&layers[i - 1].values2D[samplenum][k], &layers[i].kernels[j][k],layers[i].stride);
 					AddVectors(&layers[i].pre_activation_values2D[samplenum][j], &convolution);
 				}
 				layers[i].values2D[samplenum][j] = Relu2D(&layers[i].pre_activation_values2D[samplenum][j]);
@@ -680,7 +711,6 @@ void Network::ForwardPropogation(int samplenum,vector<vector<double>> sample, ve
 	
 	//Increment ThreadCounter
 	threadcounter++;
-
 	return;
 }
 
@@ -690,43 +720,11 @@ void Network::BackPropogation()
 	//Initial Error
 	short int final_layer = layers.size() - 1;
 
-	for (int i = 0; i < layers[final_layer].number; i++)
-	{
-		for (int j = 0; j < layers[final_layer - 1].number; j++)
-		{
-			//Weight Updates
-			switch (Optimizer)
-			{
-			case No_Optimizer:
-				weights[final_layer - 1][j][i] += lr * layers[final_layer - 1].values[0][j] * derrors[i];
-				break;
-			case Momentum:
-				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[0][j] * derrors[i]);
-				weights[final_layer - 1][j][i] += lr * momentum1D[final_layer - 1][j][i];
-				break;
-			case RMSProp:
-				rmsp1D[final_layer-1][j][i]= rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[0][j] * derrors[i]),2);
-				weights[final_layer - 1][j][i] += lr * (layers[final_layer - 1].values[0][j] * derrors[i])/(sqrt(rmsp1D[final_layer - 1][j][i]+rmspropepsilon));
-				break;
-			case Adam:
-				momentum1D[final_layer - 1][j][i] = momentumbeta * momentum1D[final_layer - 1][j][i] + (1 - momentumbeta) * (layers[final_layer - 1].values[0][j] * derrors[i]);
-				rmsp1D[final_layer - 1][j][i] = rmspropbeta * rmsp1D[final_layer - 1][j][i] + (1 - rmspropbeta) * pow((layers[final_layer - 1].values[0][j] * derrors[i]), 2);
-				weights[final_layer - 1][j][i] += lr * momentum1D[final_layer - 1][j][i] / (sqrt(rmsp1D[final_layer - 1][j][i] + rmspropepsilon));
-				break;
-			
-			}
-		}
-		
-		//Bias Updates
-		if (layers[final_layer].type != Layer::Softmax)
-			biases[final_layer][i] += lr * derrors[i];
-	}
-
 	//Shift errors to values
 	layers.back().values[0] = derrors;
 
 	int convstart = 0;
-	for (int i = final_layer - 1; i > 0; i--)
+	for (int i = final_layer; i > 0; i--)
 	{
 		//Check for Convolution Start
 		if (layers[i].type == Layer::Conv || layers[i].type == Layer::Pool2D)
@@ -771,6 +769,7 @@ void Network::BackPropogation()
 
 			else
 			{
+				if(i<final_layer)
 				if (layers[i + 1].type != Layer::Dropout)
 				{
 					double sum = 0;
@@ -783,6 +782,9 @@ void Network::BackPropogation()
 
 				for (int k = 0; k < layers[i - 1].number; k++)
 				{
+
+					double prevweight = weights[i - 1][k][j];
+
 					//Weight Updates
 					switch (Optimizer)
 					{
@@ -804,10 +806,25 @@ void Network::BackPropogation()
 				 		break;
 					}
 
-					//Bias Updates
-					if (layers[i].type != Layer::Softmax)
-						biases[i][j] += lr * layers[i].values[0][j];
+					switch (Regularizer.type)
+					{
+					case L1:
+						weights[i - 1][k][j] += (prevweight < 0) ? lr * Regularizer.L1_Lambda : lr * (-Regularizer.L1_Lambda);
+						break;
+					case L2:
+						weights[i - 1][k][j] -= lr * Regularizer.L2_Lambda * prevweight;
+						break;
+					case Elastic_Net:
+						weights[i - 1][k][j] += (prevweight < 0) ? lr * Regularizer.L1_Lambda * Regularizer.Elastic_Net_Alpha : lr * (-Regularizer.L1_Lambda) * Regularizer.Elastic_Net_Alpha;
+						weights[i - 1][k][j] -= lr * Regularizer.L2_Lambda * (1 - Regularizer.Elastic_Net_Alpha) * prevweight;
+						break;
+					}
+
 			   	}
+
+				//Bias Updates
+				if (layers[i].type != Layer::Softmax)
+					biases[i][j] += lr * layers[i].values[0][j];
 			}
 		}
 	}
@@ -845,10 +862,18 @@ void Network::BackPropogation()
 			{
 				for (int k = 0; k < layers[i - 1].kernelnumber; k++)
 				{
-					//Calculate Change
-					layers[i].deltakernel[j][k] = Convolve2D(&layers[i - 1].values2D[0][k], &layers[i].values2Dderivative[j]);
+
+					vector<vector<double>> deltay = layers[i - 1].values2D[0][k];
 					vector<vector<double>> rotatedfilter = Rotate(&layers[i].kernels[j][k]);
-					vector<vector<double>> delta2D = FullConvolve2D(&rotatedfilter, &layers[i].values2Dderivative[j]);
+					//Check for Strides
+					if (layers[i].stride > 1)
+					{
+						deltay = Dilate2D(&deltay, layers[i].stride);
+						rotatedfilter = Dilate2D(&rotatedfilter, layers[i].stride);
+					}
+
+					layers[i].deltakernel[j][k] = Convolve2D(&deltay, &layers[i].values2Dderivative[j],1);
+					vector<vector<double>> delta2D = FullConvolve2D(&rotatedfilter, &layers[i].values2Dderivative[j],1);
 
 					//Update Change
 					AddVectors(&layers[i - 1].values2Dderivative[k], &delta2D);
@@ -893,6 +918,70 @@ void Network::BackPropogation()
 }
 
 //Generic Functions
+string Network::GetInitializerName()
+{
+	switch (WeightInitializer)
+	{
+	case Random:
+		return "Random";
+	case Glorot:
+		return "Glorot";
+	case He:
+		return "He";
+	}
+}
+
+string Network::GetOptimizerName()
+{
+	switch (Optimizer)
+	{
+	case No_Optimizer:
+		return "No Optimizer";
+	case Momentum:
+		return "Momentum";
+	case RMSProp:
+		return "RMSProp";
+	case Adam:
+		return "Adam";
+	}
+}
+
+string Network::GetRegularizerName()
+{
+	switch (Regularizer.type)
+	{
+	case No_Regularizer:
+		return "No Regularizer";
+	case L1:
+		return "L1";
+	case L2:
+		return "L2";
+	case Elastic_Net:
+		return "Elastic Net";
+	}
+}
+
+string Network::GetLRSchedulerName()
+{
+	switch (LR_Scheduler.type)
+	{
+	case No_Scheduler:
+		return "No Scheduler";
+	case Step_LR:
+		return "Step LR";
+	case Multi_Step_LR:
+		return "Multi Step LR";
+	case Constant_LR:
+		return "Constant LR";
+	case Linear_LR:
+		return "Linear LR";
+	case Exponential_LR:
+		return "Exponential LR";
+	case Reduce_LR_On_Plateau:
+		return "Reduce LR On Plateau";
+	}
+}
+
 void Network::AddLayer(Layer l)
 {
 	layers.push_back(l);
@@ -969,6 +1058,16 @@ void Network::SetLRScheduler(string s)
 		LR_Scheduler.type = Exponential_LR;
 	else if (!s.compare("Reduce_LR_On_Plateau"))
 		LR_Scheduler.type = Reduce_LR_On_Plateau;
+}
+
+void Network::SetRegularizer(string s)
+{
+	if (!s.compare("L1"))
+		Regularizer.type = L1;
+	else if (!s.compare("L2"))
+		Regularizer.type = L2;
+	else if (!s.compare("Elastic_Net"))
+		Regularizer.type = Elastic_Net;
 }
 
 void Network::UpdateLearningRate(int epoch)
@@ -1088,19 +1187,25 @@ void Network::PrintParameters()
 void Network::Summary()
 {
 	//Network Summary
-	cout << "Network SUMMARY\n=============\n\n";
+	cout << "NETWORK SUMMARY\n===============\n\n";
 	for (int x = 0; x < layers.size(); x++)
 	{
 		if (layers[x].type == Layer::Pool2D)
-			cout << "LAYER: " << "Pool2D" << "\t\tDIMENSIONS: " << layers[x].padding<<"\n\n";
-		else if(layers[x].type==Layer::Conv)
-			cout << "LAYER: " << "Conv2D" << "\t\tKERNEL SIZE: " << layers[x].kernelsize+(layers[x].dilation-1)*(layers[x].kernelsize-1)<<"\tKERNEL NUMBER: " << layers[x].kernelnumber<< "\n\n";
+			cout << "LAYER: " << "Pool2D" << "\t\tDIMENSIONS: " << layers[x].padding << "\n\n";
+		else if (layers[x].type == Layer::Conv)
+			cout << "LAYER: " << "Conv2D" << "\t\tKERNEL (SIZE: " << layers[x].kernelsize + (layers[x].dilation - 1) * (layers[x].kernelsize - 1) << ",NUMBER: " << layers[x].kernelnumber << ",DILATION: "<< layers[x].dilation << ",STRIDE: " << layers[x].stride<<")"<< "\n\n";
 		else if (layers[x].type == Layer::Dropout)
-			cout << "LAYER: " << "Dropout" << "\t\tRate: " << layers[x].dropout << "\n\n";
+			cout << "LAYER: " << "Dropout" << "\t\tRATE: " << layers[x].dropout << "\n\n";
 		else
 			cout << "LAYER: " << layers[x].neurontype << "\t\tNUMBER: " << layers[x].number << "\n\n";
 	}
 	cout << "\n";
+	
+	cout << "Weight Initializer:	 " << GetInitializerName() << "\n";
+	cout << "Optimizer:		 " << GetOptimizerName() << "\n";
+	cout << "Regularizer:		 " << GetRegularizerName() << "\n";
+	cout << "LR Scheduler:		 " << GetLRSchedulerName() << "\n";
+	cout << "\n\n";
 }
 
 void Network::Initialize()
@@ -1553,10 +1658,9 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 
 	cout << "Training\n========\n" << endl;
 
-	
+	bool initializationpass = false;
 	switch (gradient_descent_type)
 	{
-
 		case Batch:batchsize = totalinputsize;
 		case Stochastic:
 		case Mini_Batch:
@@ -1564,9 +1668,9 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 			//Calculate Batch Sizes
 			batchnum = totalinputsize / (float)batchsize;
 			cout << "Total Batches= " << batchnum << "\n";
-			cout << "Batch Size= " << batchsize;
+			cout << "Batch Size= " << batchsize<<"\n\n";
 
-			cout << "\n\nTraining Started";
+			cout << "\nTraining Started";
 			cout << "\n----------------";
 
 			//Initialize Value Matrices
@@ -1600,8 +1704,11 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 						vector<double> actualvalue = (*actual)[j*batchsize+i];
 
 						//First Pass for flattening weights
-						if(threadcounter<1)
-							ForwardPropogation(i,sample, actualvalue);
+						if (!initializationpass)
+						{
+							ForwardPropogation(i, sample, actualvalue);
+							initializationpass = true;
+						}
 						else
 						{
 							thread t(&Network::ForwardPropogation, this, i, sample, actualvalue);
@@ -1651,7 +1758,6 @@ void Network::Train(vector<vector<vector<double>>>* inputs, vector<vector<double
 			//Display Thread Deaths
 			cout << "\n\nTraining Completed";
 			cout << "\n------------------\n\n";
-			cout << "Total Thread Deaths: " << threaddeaths << "/" << totalinputsize << endl;
 			break;
 	}
 

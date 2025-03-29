@@ -50,6 +50,16 @@ Layer::Layer(int kernalnumber, int size,int kerneldilation, std::string layertyp
 	dilation = kerneldilation;
 }
 
+Layer::Layer(int kernalnumber, int size, int kerneldilation,int stridenum, std::string layertype)
+{
+	type = Conv;
+	neurontype = "Relu";
+	kernelnumber = kernalnumber;
+	kernelsize = size;
+	dilation = kerneldilation;
+	stride = stridenum;
+}
+
 Layer::Layer(double drop,std::string layertype)
 {
 	if (!layertype.compare("Dropout"))type = Dropout;

@@ -422,35 +422,44 @@ int main()
 	//Autoencoder
 	srand(time(NULL));
 
-	/*
+	
 	//2D Variant
 
 	vector<vector<vector<double>>> input;
 	vector<vector<double>> actual;
 	vector<vector<double>> predicted;
 	
-	CreateMnistDataset2D(&input, &actual, 1000);
+	CreateMnistDataset2D(&input, &actual, 200);
 	AddNoise2D(&input);
 
 	//Model
 	Network model;
 	model.AddLayer(Layer(28 * 28, "Input2D"));
-	model.AddLayer(Layer(3,3, "Conv2D"));
+	model.AddLayer(Layer(32,5,1,5, "Conv2D"));
 	model.AddLayer(Layer(2, "Pool2D"));
 	model.AddLayer(Layer(32, "Tanh"));
 	model.AddLayer(Layer(28 * 28, "Relu"));
 
-	model.Compile("Mini Batch",32);
+	model.SetOptimizer("Adam");
+	model.lr = 0.0005;
+
+	model.SetRegularizer("Elastic_Net");
+	model.Regularizer.Elastic_Net_Alpha = 0.1;
+
+	model.SetLRScheduler("Reduce_LR_On_Plateau");
+	model.LR_Scheduler.gamma = 0.1;
+	model.LR_Scheduler.patience = 2;
+	model.LR_Scheduler.threshold = 0.1;
+	model.LR_Scheduler.min_lr = 1e-7;
+
+	model.Compile("Mini Batch", 64);
 	model.Summary();
 
-	model.SetOptimizer("Adam");
-	model.lr=0.0005;
 	model.Train(&input, &actual,&predicted,50, "MSE");
 
 	//Display2D(&input, { 28,28 },&predicted,{28,28}, &actual,model.totalepochs);
-	*/
-
 	
+	/*
 	//1D Variant
 	vector<vector<double>> input;
 	vector<vector<double>> actual;
@@ -462,26 +471,32 @@ int main()
 	Network model;
 	model.AddLayer(Layer(28 * 28, "Input"));
 	model.AddLayer(Layer(64, "Tanh"));
+	model.AddLayer(Layer(0.3, "Dropout"));
 	model.AddLayer(Layer(32, "Tanh"));
+	model.AddLayer(Layer(0.3, "Dropout"));
 	model.AddLayer(Layer(64, "Tanh"));
+	model.AddLayer(Layer(0.3, "Dropout"));
 	model.AddLayer(Layer(28 * 28, "Relu"));
 
 	model.SetInitializer("Glorot");
 	model.SetOptimizer("Adam");
-	model.lr = 0.0001;
+	model.lr = 1e-5;
+
+	model.SetRegularizer("Elastic_Net");
+	model.Regularizer.Elastic_Net_Alpha = 0.1;
 
 	model.SetLRScheduler("Reduce_LR_On_Plateau");
 	model.LR_Scheduler.gamma = 0.1;
 	model.LR_Scheduler.patience = 2;
-	model.LR_Scheduler.threshold = 0.01;
+	model.LR_Scheduler.threshold = 0.1;
 	model.LR_Scheduler.min_lr = 1e-7;
 
-	model.Compile("Mini Batch",256);
+	model.Compile("Mini Batch",32);
 
 	model.Summary();
 
-	model.Train(&input, &actual, &predicted, 40, "MSE");
+	model.Train(&input, &actual, &predicted, 20, "MSE");
 
 	//Display(&input, { 28,28 },&predicted,{28,28} ,&actual);
-	
+	*/
 }

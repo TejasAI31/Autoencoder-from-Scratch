@@ -39,6 +39,7 @@ public:
 
 	bool flattenweights = false;
 
+	int stride = 1;
 	int dilation = 1;
 	int padding=0;
 	int kernelnumber=0;
@@ -57,5 +58,6 @@ public:
 	Layer(int num,std::string neuronname);
 	Layer(int kernalnumber, int size,std::string layertype);
 	Layer(int kernalnumber, int size, int dilation, std::string layertype);
+	Layer(int kernalnumber, int size, int dilation,int stridenum, std::string layertype);
 	Layer(double drop,std::string layertype);
 };
